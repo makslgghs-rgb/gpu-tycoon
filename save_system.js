@@ -1,19 +1,22 @@
-// МОДУЛЬ 9: Автосохранение и восстановление полного прогресса корпорации
+// МОДУЛЬ 9: Надёжное автосохранение (каждую 1 минуту, при сворачивании/закрытии и после действий)
 
 const SaveSystem = {
-    SAVE_KEY: 'gpu_tycoon_full_gamestate_v1',
+    SAVE_KEY: 'gpu_tycoon_full_gamestate_v2',
 
     saveGame() {
         try {
-            // Собираем только пользовательские чипы из Chip Fab
             const customChips = {};
-            for (const [key, spec] of Object.entries(PART_CATALOG)) {
-                if (key.startsWith('custom_part_')) {
-                    customChips[key] = spec;
+            if (typeof PART_CATALOG !== 'undefined') {
+                for (const [key, spec] of Object.entries(PART_CATALOG)) {
+                    if (key.startsWith('custom_part_')) {
+                        customChips[key] = spec;
+                    }
                 }
             }
 
-            const playerComp = MarketSystem.competitors.find(c => c.id === 'player');
+            const playerComp = (typeof MarketSystem !== 'undefined')
+                ? MarketSystem.competitors.find(c => c.id === 'player')
+                : null;
 
             const state = {
                 money: money,
@@ -38,12 +41,11 @@ const SaveSystem = {
 
             localStorage.setItem(this.SAVE_KEY, JSON.stringify(state));
 
-            // Дублируем прогресс в реестр аккаунтов профиля
             if (typeof ProfileSystem !== 'undefined') {
                 ProfileSystem.syncMyProgressToRegistry();
             }
         } catch (e) {
-            console.warn("Ошибка автосохранения:", e);
+            console.warn("Ошибка сохранения:", e);
         }
     },
 
@@ -59,14 +61,12 @@ const SaveSystem = {
             if (typeof state.reputation === 'number') reputation = state.reputation;
             if (typeof state.year === 'number' && state.year > year) year = state.year;
 
-            // Восстанавливаем кастомные чипы из Chip Fab
             if (state.customChips) {
                 for (const [key, spec] of Object.entries(state.customChips)) {
                     PART_CATALOG[key] = spec;
                 }
             }
 
-            // Восстанавливаем изученные технологии
             if (Array.isArray(state.unlockedParts)) {
                 unlockedParts.clear();
                 state.unlockedParts.forEach(k => {
@@ -74,7 +74,6 @@ const SaveSystem = {
                 });
             }
 
-            // Восстанавливаем заводы и склад
             if (state.factories && typeof FactorySystem !== 'undefined') {
                 FactorySystem.discountFactoryLevel = state.factories.discountLevel || 0;
                 FactorySystem.productionFactoryLevel = state.factories.prodLevel || 0;
@@ -84,7 +83,6 @@ const SaveSystem = {
                 FactorySystem.updateBadge();
             }
 
-            // Восстанавливаем твой флагман и долю рынка
             if (state.playerMarket) {
                 const playerComp = MarketSystem.competitors.find(c => c.id === 'player');
                 if (playerComp) {
@@ -94,7 +92,6 @@ const SaveSystem = {
                 }
             }
 
-            // Обновляем весь интерфейс на экране
             if (moneyEl) moneyEl.textContent = `$${money.toLocaleString()}`;
             if (repEl) repEl.textContent = reputation;
             if (yearEl) yearEl.textContent = year;
@@ -114,11 +111,23 @@ const SaveSystem = {
     }
 };
 
-// Автоматически сохраняем прогресс каждые 5 секунд и перед закрытием/обновлением вкладки
-window.addEventListener('beforeunload', () => {
+// 1. Автосохранение ровно каждую 1 минуту (60 000 мс)
+setInterval(() => {
+    SaveSystem.saveGame();
+}, 60000);
+
+// 2. Сохранение при сворачивании вкладки / переключении приложения на телефоне
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        SaveSystem.saveGame();
+    }
+});
+
+// 3. Сохранение при закрытии или обновлении страницы (для ПК и мобильных браузеров)
+window.addEventListener('pagehide', () => {
     SaveSystem.saveGame();
 });
 
-setInterval(() => {
+window.addEventListener('beforeunload', () => {
     SaveSystem.saveGame();
-}, 5000);
+});

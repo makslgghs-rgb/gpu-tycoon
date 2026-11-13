@@ -137,6 +137,7 @@ function renderResearchModal() {
                     buildToolbar();
                     renderResearchModal();
                     addLog(`🔬 Исследована новая технология: <strong>${spec.icon} ${spec.name}</strong>! Деталь добавлена на панель сборки.`);
+                    if (typeof SaveSystem !== 'undefined') SaveSystem.saveGame();
                 }
             });
         }
@@ -356,20 +357,29 @@ canvasEl.addEventListener('contextmenu', (e) => {
 });
 
 // Отрисовка окна доли рынка и взаимодействия с компаниями
+// Отрисовка окна доли рынка: показываем только Топ-10 лидеров рынка
 function renderMarketModal() {
     modalYearEl.textContent = year;
     marketBarsEl.innerHTML = '';
 
-    const sorted = [...MarketSystem.competitors].sort((a, b) => b.share - a.share);
+    // Сортируем по доле рынка, а при равной доле — по мощности видеокарты
+    const sorted = [...MarketSystem.competitors].sort((a, b) => {
+        if (b.share !== a.share) return b.share - a.share;
+        return (b.power || 0) - (a.power || 0);
+    });
 
-    sorted.forEach(comp => {
+    const top10 = sorted.slice(0, 10);
+    const playerRank = sorted.findIndex(c => c.id === 'player') + 1;
+    const isPlayerInTop10 = top10.some(c => c.id === 'player');
+
+    const renderCompanyCard = (comp, rank) => {
         const isCompetitor = comp.id !== 'player';
         const row = document.createElement('div');
         row.className = 'company-row' + (isCompetitor ? ' clickable' : '');
 
         row.innerHTML = `
             <div class="company-info">
-                <span style="color: ${comp.color}">${comp.name}</span>
+                <span style="color: ${comp.color}"><strong>#${rank}</strong> ${comp.name}</span>
                 <span>${comp.share}% рынка</span>
             </div>
             <div class="company-flagship">Флагман: ${comp.flagship}</div>
@@ -390,11 +400,28 @@ function renderMarketModal() {
         }
 
         marketBarsEl.appendChild(row);
+    };
+
+    // Выводим Топ-10 лидеров
+    top10.forEach((comp, index) => {
+        renderCompanyCard(comp, index + 1);
     });
+
+    // Если игрок пока ниже 10-го места — показываем его позицию отдельно внизу
+    if (!isPlayerInTop10 && playerRank > 0) {
+        const divider = document.createElement('div');
+        divider.style.cssText = 'text-align:center; font-size:12px; color:#94a3b8; margin: 6px 0;';
+        divider.textContent = '• • • Ваша позиция вне Топ-10 • • •';
+        marketBarsEl.appendChild(divider);
+
+        const playerComp = sorted[playerRank - 1];
+        renderCompanyCard(playerComp, playerRank);
+    }
 
     marketNewsEl.textContent = MarketSystem.lastNews;
     myShareBadge.textContent = `${MarketSystem.getPlayerShare()}%`;
 }
+
 
 // Открытие/закрытие модальных окон
 marketBtn.addEventListener('click', () => {
@@ -548,6 +575,7 @@ function executeRelease(sim, segmentId) {
         return;
     }
 
+    if (typeof SaveSystem !== 'undefined') SaveSystem.saveGame();
     nameInput.value = `GTX ${Math.floor(Math.random() * 800 + 200)}`;
     onCircuitChanged();
 }
