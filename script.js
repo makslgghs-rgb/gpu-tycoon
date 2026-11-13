@@ -156,14 +156,26 @@ function addNode(typeKey) {
         }
     }
 
+    // Адаптивный спавн внутри видимых границ платы (подходит и для ПК, и для узких экранов телефонов)
+    const boardW = canvasEl.clientWidth || 300;
+    const boardH = canvasEl.clientHeight || 350;
+    const nodeW = spec.isCompact ? 36 : 115;
+    const nodeH = spec.isCompact ? 36 : 60;
+
+    const minX = 16;
+    const maxX = Math.max(minX + 10, boardW - nodeW - 16);
+    const minY = 16;
+    const maxY = Math.max(minY + 10, boardH - nodeH - 16);
+
     nodes.push({
         uid: 'node_' + nextUid++,
         type: typeKey,
-        x: 150 + Math.floor(Math.random() * 180),
-        y: 120 + Math.floor(Math.random() * 140)
+        x: Math.floor(minX + Math.random() * (maxX - minX)),
+        y: Math.floor(minY + Math.random() * (maxY - minY))
     });
     renderBoard();
 }
+
 
 function renderBoard() {
     nodesLayer.innerHTML = '';
