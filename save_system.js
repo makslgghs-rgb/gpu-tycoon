@@ -131,3 +131,8 @@ window.addEventListener('pagehide', () => {
 window.addEventListener('beforeunload', () => {
     SaveSystem.saveGame();
 });
+
+// Автоматическая загрузка сохранения сразу после инициализации всех скриптов
+window.addEventListener('DOMContentLoaded', () => {
+    SaveSystem.loadGame();
+});
