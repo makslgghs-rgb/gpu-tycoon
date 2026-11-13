@@ -137,7 +137,7 @@ function renderResearchModal() {
                     buildToolbar();
                     renderResearchModal();
                     addLog(`🔬 Исследована новая технология: <strong>${spec.icon} ${spec.name}</strong>! Деталь добавлена на панель сборки.`);
-                    if (typeof SaveSystem !== 'undefined') SaveSystem.saveGame();
+                    if (typeof ProfileSystem !== 'undefined') ProfileSystem.saveGameProgress();
                 }
             });
         }
@@ -145,6 +145,7 @@ function renderResearchModal() {
         researchListEl.appendChild(card);
     }
 }
+
 function addNode(typeKey) {
     const spec = PART_CATALOG[typeKey];
     if (!spec || !unlockedParts.has(typeKey)) return;
@@ -157,7 +158,6 @@ function addNode(typeKey) {
         }
     }
 
-    // Адаптивный спавн внутри видимых границ платы (подходит и для ПК, и для узких экранов телефонов)
     const boardW = canvasEl.clientWidth || 300;
     const boardH = canvasEl.clientHeight || 350;
     const nodeW = spec.isCompact ? 36 : 115;
@@ -176,8 +176,6 @@ function addNode(typeKey) {
     });
     renderBoard();
 }
-
-
 function renderBoard() {
     nodesLayer.innerHTML = '';
 
@@ -356,13 +354,11 @@ canvasEl.addEventListener('contextmenu', (e) => {
     WireSystem.removeHoveredWire();
 });
 
-// Отрисовка окна доли рынка и взаимодействия с компаниями
 // Отрисовка окна доли рынка: показываем только Топ-10 лидеров рынка
 function renderMarketModal() {
     modalYearEl.textContent = year;
     marketBarsEl.innerHTML = '';
 
-    // Сортируем по доле рынка, а при равной доле — по мощности видеокарты
     const sorted = [...MarketSystem.competitors].sort((a, b) => {
         if (b.share !== a.share) return b.share - a.share;
         return (b.power || 0) - (a.power || 0);
@@ -402,12 +398,10 @@ function renderMarketModal() {
         marketBarsEl.appendChild(row);
     };
 
-    // Выводим Топ-10 лидеров
     top10.forEach((comp, index) => {
         renderCompanyCard(comp, index + 1);
     });
 
-    // Если игрок пока ниже 10-го места — показываем его позицию отдельно внизу
     if (!isPlayerInTop10 && playerRank > 0) {
         const divider = document.createElement('div');
         divider.style.cssText = 'text-align:center; font-size:12px; color:#94a3b8; margin: 6px 0;';
@@ -422,8 +416,6 @@ function renderMarketModal() {
     myShareBadge.textContent = `${MarketSystem.getPlayerShare()}%`;
 }
 
-
-// Открытие/закрытие модальных окон
 marketBtn.addEventListener('click', () => {
     renderMarketModal();
     marketModal.classList.remove('hidden');
@@ -517,7 +509,6 @@ function executeRelease(sim, segmentId) {
     const gpuName = nameInput.value.trim() || "Node GPU";
     money -= sim.totalCost;
 
-    // Списываем со склада бесплатные детали, которые использовались в этой видеокарте
     if (typeof FactorySystem !== 'undefined' && sim.usedStockMap) {
         FactorySystem.consumeUsedStock(sim.usedStockMap);
     }
@@ -528,7 +519,6 @@ function executeRelease(sim, segmentId) {
     reputation = Math.max(1, reputation + result.repChange);
     year++;
 
-    // Завод штампует новую партию деталей (или накапливает прогресс) за прошедший год
     let prodReport = '';
     if (typeof FactorySystem !== 'undefined') {
         const produced = FactorySystem.produceYearlyBatch();
@@ -546,7 +536,6 @@ function executeRelease(sim, segmentId) {
     yearEl.textContent = year;
     myShareBadge.textContent = `${result.marketUpdate.playerShare}%`;
 
-    // Синхронизация релиза, нового года и доли рынка с другими игроками в P2P-сети
     if (typeof P2PNetwork !== 'undefined') {
         const prof = P2PNetwork.getMyProfileInfo();
         P2PNetwork.recalculateGlobalMarket();
@@ -565,7 +554,6 @@ function executeRelease(sim, segmentId) {
         result.isFail || result.profit < 0
     );
 
-    // Проверка на банкротство (текущий год при сбросе остаётся общим)
     const hasStock = (typeof FactorySystem !== 'undefined' && FactorySystem.getTotalStock() > 0);
     const priceMult = (typeof FactorySystem !== 'undefined') ? FactorySystem.getPriceMultiplier() : 1.0;
     const minBoardCost = Math.round(1780 * priceMult);
@@ -575,12 +563,13 @@ function executeRelease(sim, segmentId) {
         return;
     }
 
-    if (typeof SaveSystem !== 'undefined') SaveSystem.saveGame();
+    if (typeof ProfileSystem !== 'undefined') {
+        ProfileSystem.saveGameProgress();
+    }
+
     nameInput.value = `GTX ${Math.floor(Math.random() * 800 + 200)}`;
     onCircuitChanged();
 }
-
-
 // B2B-сделки с конкурентами
 const COMPANY_DEAL_RATES = {
     nvidia: { mult: 1.45, note: "NVIDIA платит премиальную цену (+45%) за передовые компоненты." },
@@ -661,13 +650,11 @@ function executeB2BDeal(comp, partKey, amount, unitPrice) {
     moneyEl.textContent = `$${money.toLocaleString()}`;
 
     if (comp.isRemotePlayer && typeof P2PNetwork !== 'undefined') {
-        // Отправляем компоненты напрямую на склад живого игрока по P2P-сети
         P2PNetwork.sendTradeToPlayer(comp.peerId, partKey, actualAmount, unitPrice);
         addLog(
             `🌐 <strong>P2P-Сделка с ${comp.name}:</strong> отправлено <strong>${spec.icon} ${spec.name} (${actualAmount} шт.)</strong> на сумму <strong>+$${totalRevenue.toLocaleString()}</strong>!`
         );
     } else {
-        // Стандартная сделка с ИИ-корпорацией
         if (spec.power > 0) {
             comp.power += Math.round(spec.power * 0.15 * actualAmount);
             comp.flagship = `${comp.flagship.split(' (').at(0)} (${comp.power} баллов)`;
@@ -677,12 +664,14 @@ function executeB2BDeal(comp, partKey, amount, unitPrice) {
         );
     }
 
+    if (typeof ProfileSystem !== 'undefined') {
+        ProfileSystem.saveGameProgress();
+    }
+
     renderMarketModal();
     openDealModal(comp);
 }
 
-
-// Полный сброс компании при банкротстве (текущий год остаётся общим для всех)
 // Полный сброс компании при банкротстве (текущий год остаётся общим для всех)
 function triggerBankruptcyReset() {
     money = SANDBOX_MODE ? 100000000 : 4000;
@@ -726,9 +715,8 @@ function triggerBankruptcyReset() {
     buildToolbar();
     renderBoard();
 
-    // Сразу фиксируем сброшенное состояние в автосохранении
-    if (typeof SaveSystem !== 'undefined') {
-        SaveSystem.saveGame();
+    if (typeof ProfileSystem !== 'undefined') {
+        ProfileSystem.saveGameProgress();
     }
 
     addLog(
@@ -736,7 +724,6 @@ function triggerBankruptcyReset() {
         true
     );
 }
-
 
 // Очистка платы
 clearBtn.addEventListener('click', () => {
@@ -758,14 +745,3 @@ myShareBadge.textContent = `${MarketSystem.getPlayerShare()}%`;
 if (typeof FactorySystem !== 'undefined') FactorySystem.updateBadge();
 buildToolbar();
 renderBoard();
-// Запуск игры и загрузка автосохранения
-moneyEl.textContent = `$${money.toLocaleString()}`;
-myShareBadge.textContent = `${MarketSystem.getPlayerShare()}%`;
-if (typeof FactorySystem !== 'undefined') FactorySystem.updateBadge();
-buildToolbar();
-renderBoard();
-
-if (typeof SaveSystem !== 'undefined') {
-    SaveSystem.loadGame();
-}
-

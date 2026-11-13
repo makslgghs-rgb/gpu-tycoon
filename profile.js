@@ -1,33 +1,140 @@
-// МОДУЛЬ 6: Профиль игрока, регистрация с паролем, вход и распределённый реестр аккаунтов
+// МОДУЛЬ 6: Профиль игрока, вход/регистрация + надёжное автосохранение всего прогресса
 
 const ProfileSystem = {
     STORAGE_KEY: 'gpu_tycoon_profile_v2',
     REGISTRY_KEY: 'gpu_tycoon_accounts_registry_v1',
+    GAMESTATE_KEY: 'gpu_tycoon_saved_progress_v3',
 
-    user: null, // Текущий авторизованный аккаунт
-    accountsRegistry: {}, // Распределённый реестр ников: { nickLower: { nickname, passwordHash, avatar, regDate, money, reputation } }
-    authMode: 'register', // 'register' или 'login'
+    user: null,
+    accountsRegistry: {},
+    authMode: 'register',
+    isPasswordVisible: false,
 
     AVATARS: ["🧑‍💻", "👨‍🔬", "🤖", "🦊", "👑", "🚀"],
     selectedAvatar: "🧑‍💻",
 
     init() {
         this.loadFromStorage();
+        this.loadGameProgress();
         this.updateHeaderButton();
         this.bindEvents();
+
+        // Автосохранение ровно каждую 1 минуту (60 000 мс)
+        setInterval(() => this.saveGameProgress(), 60000);
+
+        // Сохранение при сворачивании вкладки / переключении приложения на телефоне
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') this.saveGameProgress();
+        });
+
+        // Сохранение при закрытии или обновлении страницы
+        window.addEventListener('pagehide', () => this.saveGameProgress());
+        window.addEventListener('beforeunload', () => this.saveGameProgress());
     },
 
+    // Сохранение полного прогресса игры (деньги, репутация, год, технологии, заводы, рынок)
+    saveGameProgress() {
+        try {
+            const customChips = {};
+            if (typeof PART_CATALOG !== 'undefined') {
+                for (const [key, spec] of Object.entries(PART_CATALOG)) {
+                    if (key.startsWith('custom_part_')) customChips[key] = spec;
+                }
+            }
+
+            const playerComp = (typeof MarketSystem !== 'undefined')
+                ? MarketSystem.competitors.find(c => c.id === 'player')
+                : null;
+
+            const state = {
+                money: money,
+                reputation: reputation,
+                year: year,
+                unlockedParts: Array.from(unlockedParts),
+                customChips: customChips,
+                factories: (typeof FactorySystem !== 'undefined') ? {
+                    discountLevel: FactorySystem.discountFactoryLevel,
+                    prodLevel: FactorySystem.productionFactoryLevel,
+                    selectedPart: FactorySystem.selectedPartToProduce,
+                    progress: FactorySystem.productionProgress,
+                    inventory: FactorySystem.inventory
+                } : null,
+                playerMarket: playerComp ? {
+                    share: playerComp.share,
+                    flagship: playerComp.flagship,
+                    power: playerComp.power
+                } : null
+            };
+
+            localStorage.setItem(this.GAMESTATE_KEY, JSON.stringify(state));
+            this.syncMyProgressToRegistry();
+        } catch (e) {
+            console.warn("Ошибка сохранения прогресса:", e);
+        }
+    },
+
+    // Восстановление полного прогресса при входе или обновлении страницы
+    loadGameProgress() {
+        try {
+            const raw = localStorage.getItem(this.GAMESTATE_KEY);
+            if (!raw) return;
+
+            const state = JSON.parse(raw);
+            if (!state) return;
+
+            if (typeof state.money === 'number') money = state.money;
+            if (typeof state.reputation === 'number') reputation = state.reputation;
+            if (typeof state.year === 'number' && state.year > year) year = state.year;
+
+            if (state.customChips) {
+                for (const [key, spec] of Object.entries(state.customChips)) {
+                    PART_CATALOG[key] = spec;
+                }
+            }
+
+            if (Array.isArray(state.unlockedParts)) {
+                unlockedParts.clear();
+                state.unlockedParts.forEach(k => {
+                    if (PART_CATALOG[k]) unlockedParts.add(k);
+                });
+            }
+
+            if (state.factories && typeof FactorySystem !== 'undefined') {
+                FactorySystem.discountFactoryLevel = state.factories.discountLevel || 0;
+                FactorySystem.productionFactoryLevel = state.factories.prodLevel || 0;
+                FactorySystem.selectedPartToProduce = state.factories.selectedPart || 'vram';
+                FactorySystem.productionProgress = state.factories.progress || 0;
+                FactorySystem.inventory = state.factories.inventory || {};
+                FactorySystem.updateBadge();
+            }
+
+            if (state.playerMarket) {
+                const playerComp = MarketSystem.competitors.find(c => c.id === 'player');
+                if (playerComp) {
+                    playerComp.share = state.playerMarket.share || 1;
+                    playerComp.flagship = state.playerMarket.flagship || "Нет релизов";
+                    playerComp.power = state.playerMarket.power || 0;
+                }
+            }
+
+            if (moneyEl) moneyEl.textContent = `$${money.toLocaleString()}`;
+            if (repEl) repEl.textContent = reputation;
+            if (yearEl) yearEl.textContent = year;
+            if (myShareBadge) myShareBadge.textContent = `${MarketSystem.getPlayerShare()}%`;
+
+            buildToolbar();
+            onCircuitChanged();
+        } catch (e) {
+            console.warn("Ошибка загрузки прогресса:", e);
+        }
+    },
     loadFromStorage() {
         try {
             const rawReg = localStorage.getItem(this.REGISTRY_KEY);
-            if (rawReg) {
-                this.accountsRegistry = JSON.parse(rawReg);
-            }
+            if (rawReg) this.accountsRegistry = JSON.parse(rawReg);
 
             const rawUser = localStorage.getItem(this.STORAGE_KEY);
-            if (rawUser) {
-                this.user = JSON.parse(rawUser);
-            }
+            if (rawUser) this.user = JSON.parse(rawUser);
         } catch (e) {
             console.warn("Ошибка загрузки профиля:", e);
         }
@@ -46,7 +153,6 @@ const ProfileSystem = {
         }
     },
 
-    // Простой и надёжный хэш пароля (чтобы не хранить пароль в открытом виде)
     hashPassword(nick, password) {
         const str = `${nick.toLowerCase().trim()}::salt_gpu_tycoon::${password}`;
         let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -60,7 +166,6 @@ const ProfileSystem = {
         return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
     },
 
-    // Объединение локального реестра аккаунтов с реестром из P2P-сети
     mergeRegistry(remoteRegistry) {
         if (!remoteRegistry || typeof remoteRegistry !== 'object') return;
         let updated = false;
@@ -77,12 +182,9 @@ const ProfileSystem = {
             }
         }
 
-        if (updated) {
-            this.saveToStorage();
-        }
+        if (updated) this.saveToStorage();
     },
 
-    // Обновление прогресса текущего игрока в реестре (вызывается при релизах)
     syncMyProgressToRegistry() {
         if (!this.user) return;
         const key = this.user.nickname.toLowerCase();
@@ -107,23 +209,29 @@ const ProfileSystem = {
 
         if (profileBtn) {
             profileBtn.addEventListener('click', () => {
+                this.isPasswordVisible = false;
                 this.renderModal();
                 profileModal.classList.remove('hidden');
             });
         }
 
         if (closeProfileBtn) {
-            closeProfileBtn.addEventListener('click', () => profileModal.classList.add('hidden'));
+            closeProfileBtn.addEventListener('click', () => {
+                this.isPasswordVisible = false;
+                profileModal.classList.add('hidden');
+            });
         }
 
         if (profileModal) {
             profileModal.addEventListener('click', (e) => {
-                if (e.target === profileModal) profileModal.classList.add('hidden');
+                if (e.target === profileModal) {
+                    this.isPasswordVisible = false;
+                    profileModal.classList.add('hidden');
+                }
             });
         }
     },
 
-    // Проверка, занят ли никнейм в реестре или среди онлайн-игроков
     isNicknameTaken(nickname) {
         const key = nickname.trim().toLowerCase();
         if (this.accountsRegistry[key]) return true;
@@ -137,7 +245,6 @@ const ProfileSystem = {
         return false;
     },
 
-    // Регистрация нового аккаунта
     register(nickname, password) {
         const cleanNick = nickname.trim();
         const cleanPass = password.trim();
@@ -151,21 +258,16 @@ const ProfileSystem = {
             return;
         }
         if (this.isNicknameTaken(cleanNick)) {
-            addLog(`⛔ Никнейм <strong>${cleanNick}</strong> уже занят другим игроком! Выберите другой или нажмите «Войти».`, true);
+            addLog(`⛔ Никнейм <strong>${cleanNick}</strong> уже занят другим игроком!`, true);
             return;
         }
 
         const now = new Date();
-        const regDate = now.toLocaleDateString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
-
+        const regDate = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
         const passHash = this.hashPassword(cleanNick, cleanPass);
         const nickKey = cleanNick.toLowerCase();
 
-        const accountRecord = {
+        this.accountsRegistry[nickKey] = {
             nickname: cleanNick,
             passwordHash: passHash,
             avatar: this.selectedAvatar,
@@ -175,27 +277,24 @@ const ProfileSystem = {
             updatedAt: Date.now()
         };
 
-        this.accountsRegistry[nickKey] = accountRecord;
         this.user = {
             nickname: cleanNick,
             avatar: this.selectedAvatar,
             regDate: regDate,
+            savedPassword: cleanPass,
             friends: []
         };
 
+        this.isPasswordVisible = false;
         this.saveToStorage();
+        this.saveGameProgress();
         this.updateHeaderButton();
         this.renderModal();
 
-        // Рассылаем новый аккаунт в P2P-сеть, чтобы другие игроки знали, что ник занят
-        if (typeof P2PNetwork !== 'undefined') {
-            P2PNetwork.broadcastState('sync');
-        }
-
-        addLog(`👤 Зарегистрирован уникальный профиль: <strong>${this.user.avatar} ${this.user.nickname}</strong> (Дата: ${regDate}).`);
+        if (typeof P2PNetwork !== 'undefined') P2PNetwork.broadcastState('sync');
+        addLog(`👤 Зарегистрирован уникальный профиль: <strong>${this.user.avatar} ${this.user.nickname}</strong>.`);
     },
 
-    // Вход в существующий аккаунт по нику и паролю
     login(nickname, password) {
         const cleanNick = nickname.trim();
         const cleanPass = password.trim();
@@ -203,12 +302,11 @@ const ProfileSystem = {
 
         const record = this.accountsRegistry[nickKey];
         if (!record) {
-            addLog(`⛔ Аккаунт <strong>${cleanNick}</strong> не найден в базе! Проверьте ник или зарегистрируйтесь.`, true);
+            addLog(`⛔ Аккаунт <strong>${cleanNick}</strong> не найден в базе!`, true);
             return;
         }
 
-        const inputHash = this.hashPassword(cleanNick, cleanPass);
-        if (inputHash !== record.passwordHash) {
+        if (this.hashPassword(cleanNick, cleanPass) !== record.passwordHash) {
             addLog(`⛔ Неверный пароль для аккаунта <strong>${record.nickname}</strong>!`, true);
             return;
         }
@@ -216,11 +314,11 @@ const ProfileSystem = {
         this.user = {
             nickname: record.nickname,
             avatar: record.avatar || "🧑‍💻",
-            regDate: record.regDate || "01.01.2026",
+            regDate: record.regDate || "14.11.2026",
+            savedPassword: cleanPass,
             friends: this.user?.friends || []
         };
 
-        // Восстанавливаем капитал и репутацию аккаунта, если они сохранились в реестре
         if (typeof record.money === 'number' && record.money > 0) {
             money = record.money;
             if (moneyEl) moneyEl.textContent = `$${money.toLocaleString()}`;
@@ -230,17 +328,16 @@ const ProfileSystem = {
             if (repEl) repEl.textContent = reputation;
         }
 
+        this.isPasswordVisible = false;
         this.saveToStorage();
+        this.saveGameProgress();
         this.updateHeaderButton();
         this.renderModal();
 
-        if (typeof P2PNetwork !== 'undefined') {
-            P2PNetwork.broadcastState('sync');
-        }
-
+        if (typeof P2PNetwork !== 'undefined') P2PNetwork.broadcastState('sync');
         addLog(`🔓 Выполнен вход в профиль <strong>${this.user.avatar} ${this.user.nickname}</strong>!`);
     },
-    // Добавление друга по нику
+
     addFriend(friendNick) {
         if (!this.user) return;
         const cleanName = friendNick.trim();
@@ -279,21 +376,20 @@ const ProfileSystem = {
         this.renderModal();
     },
 
-    // Выход из аккаунта (сам аккаунт остаётся в реестре, в него можно войти снова по паролю)
     logout() {
         this.user = null;
         this.authMode = 'login';
+        this.isPasswordVisible = false;
         this.saveToStorage();
         this.updateHeaderButton();
         this.renderModal();
         addLog("🔒 Вы вышли из аккаунта.");
     },
-
     renderModal() {
         const container = document.getElementById('profile-body');
         if (!container) return;
 
-        // 1. Если игрок не вошёл — показываем вкладки "Регистрация" и "Войти"
+        // 1. Окно регистрации / входа
         if (!this.user) {
             const isReg = (this.authMode === 'register');
 
@@ -315,7 +411,7 @@ const ProfileSystem = {
                     <h3>${isReg ? 'Создание уникального аккаунта' : 'Вход в существующий профиль'}</h3>
                     <p class="reg-sub">
                         ${isReg
-                            ? 'Никнейм закрепляется за вами в P2P-сети. Запомните пароль, чтобы входить с любого устройства!'
+                            ? 'Никнейм закрепляется за вами в P2P-сети. Вы всегда сможете подсмотреть свой пароль в профиле по кнопке.'
                             : 'Введите ваш никнейм и пароль для восстановления профиля и баланса.'}
                     </p>
 
@@ -374,13 +470,17 @@ const ProfileSystem = {
             return;
         }
 
-        // 2. Если игрок авторизован — показываем карточку профиля и друзей с живым статусом из сети
+        // 2. Карточка авторизованного профиля с защищённым показом пароля
+        const rawPass = this.user.savedPassword || '••••••••';
+        const maskedPass = '•'.repeat(Math.max(6, rawPass.length));
+        const shownPasswordText = this.isPasswordVisible ? rawPass : maskedPass;
+        const toggleBtnLabel = this.isPasswordVisible ? '🙈 Скрыть' : '👁 Показать';
+
         let friendsHtml = '';
         if (this.user.friends.length === 0) {
             friendsHtml = `<p class="empty-stock">Список друзей пока пуст. Добавьте друга по нику выше!</p>`;
         } else {
             this.user.friends.forEach((fr, idx) => {
-                // Проверяем, есть ли друг сейчас в P2P-сети
                 let livePeer = null;
                 if (typeof P2PNetwork !== 'undefined' && P2PNetwork.peers) {
                     livePeer = Object.values(P2PNetwork.peers).find(
@@ -420,6 +520,12 @@ const ProfileSystem = {
                         <div class="profile-meta">📅 Дата регистрации: <strong>${this.user.regDate}</strong></div>
                         <div class="profile-meta">💰 Текущий бюджет: <strong style="color:#4ade80">$${money.toLocaleString()}</strong></div>
                         <div class="profile-meta">🏆 Репутация: <strong style="color:#facc15">${reputation} ★</strong> • Год: <strong>${year}</strong></div>
+                        <div class="profile-meta" style="margin-top:6px; display:flex; align-items:center; gap:8px;">
+                            <span>🔑 Пароль: <strong style="color:#e2e8f0; letter-spacing:1px;">${shownPasswordText}</strong></span>
+                            <button type="button" id="toggle-pass-view-btn" style="padding:3px 8px; font-size:11px; background:#1e293b; color:#93c5fd; border:1px solid #475569; border-radius:5px; cursor:pointer;">
+                                ${toggleBtnLabel}
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <button id="profile-logout-btn" class="logout-btn">Выйти</button>
@@ -434,6 +540,11 @@ const ProfileSystem = {
                 <div class="friends-list">${friendsHtml}</div>
             </div>
         `;
+
+        document.getElementById('toggle-pass-view-btn')?.addEventListener('click', () => {
+            this.isPasswordVisible = !this.isPasswordVisible;
+            this.renderModal();
+        });
 
         const addFriendBtn = document.getElementById('add-friend-btn');
         const addFriendInput = document.getElementById('add-friend-input');
