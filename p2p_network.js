@@ -266,10 +266,23 @@ const P2PNetwork = {
         }
     },
     // Обработка данных от других игроков в сети
+        // Обработка данных от других игроков в сети (с защитой от клонов при перезагрузке)
     handleWorldMessage(msg) {
+        // Игнорируем пакеты от нашего же аккаунта, если мы вошли под тем же ником с другого окна
+        const myProf = this.getMyProfileInfo();
+        if (msg.nickname && myProf.nickname && msg.nickname.toLowerCase() === myProf.nickname.toLowerCase()) {
+            return;
+        }
+
+        // Если игрок с таким ником перезагрузил страницу — удаляем его старую зависшую сессию
+        for (const [oldId, oldPeer] of Object.entries(this.peers)) {
+            if (oldId !== msg.senderId && oldPeer.nickname && oldPeer.nickname.toLowerCase() === msg.nickname.toLowerCase()) {
+                delete this.peers[oldId];
+            }
+        }
+
         const isNewPeer = !this.peers[msg.senderId];
 
-        // Объединяем реестр аккаунтов с данными из сети (защита от одинаковых ников + вход по паролю)
         if (msg.registry && typeof ProfileSystem !== 'undefined') {
             ProfileSystem.mergeRegistry(msg.registry);
         }
@@ -284,18 +297,15 @@ const P2PNetwork = {
             lastSeen: Date.now()
         };
 
-        // Синхронизация единого года (берём максимальный актуальный год из роя)
         if (msg.year && msg.year > year) {
             year = msg.year;
             if (yearEl) yearEl.textContent = year;
         }
 
-        // Если зашёл новичок — делимся с ним текущим состоянием мира и реестром аккаунтов
         if (msg.type === 'hello' && isNewPeer) {
             setTimeout(() => this.broadcastState('sync'), 300 + Math.random() * 700);
         }
 
-        // Если кто-то выпустил новую видеокарту — показываем в новостях
         if (msg.type === 'release' && msg.news) {
             MarketSystem.lastNews = msg.news;
             addLog(`📡 <b>[Сеть]</b> ${msg.news}`);
@@ -305,11 +315,11 @@ const P2PNetwork = {
         const modeLabel = (this.ws && this.ws.readyState === WebSocket.OPEN) ? "Онлайн" : "Локальная сеть";
         this.updateStatusBadge(`${modeLabel} (${Object.keys(this.peers).length + 1})`);
 
-        // Если окно рынка сейчас открыто — обновляем его в реальном времени
         if (marketModal && !marketModal.classList.contains('hidden')) {
             renderMarketModal();
         }
     },
+
 
     cleanupDeadPeers() {
         const now = Date.now();
@@ -328,25 +338,23 @@ const P2PNetwork = {
     },
 
     // Распределённый пересчёт долей рынка между ИИ-ботами и всеми живыми игроками
+        // Честный пересчёт долей рынка (новички без релизов получают 1%, основной рынок у активных игроков)
     recalculateGlobalMarket() {
         const peerList = Object.values(this.peers);
         const me = MarketSystem.competitors.find(c => c.id === 'player');
         if (!me) return;
 
-        // Удаляем старые записи живых игроков перед обновлением списка
         MarketSystem.competitors = MarketSystem.competitors.filter(c => !c.isRemotePlayer);
-
-        // Если в сети нет других игроков — работает стандартный одиночный баланс
         if (peerList.length === 0) return;
 
         const nv = MarketSystem.competitors.find(c => c.id === 'nvidia');
         const amd = MarketSystem.competitors.find(c => c.id === 'amd');
         const intel = MarketSystem.competitors.find(c => c.id === 'intel');
 
-        // После 2020 года ИИ-корпорации держат ровно 15% (7% + 5% + 3%), а 85% делят игроки
-        let botsShare = 15;
+        // После 2020 года боты фиксируются на 15%, до 2020 года постепенно уступают рынок
         if (year <= 2020) {
-            botsShare = Math.max(25, 80 - peerList.length * 8);
+            const activePlayersCount = [me, ...peerList].filter(p => (p.power || 0) > 0).length;
+            const botsShare = Math.max(25, 85 - activePlayersCount * 10);
             if (nv) nv.share = Math.round(botsShare * 0.50);
             if (amd) amd.share = Math.round(botsShare * 0.35);
             if (intel) intel.share = Math.max(1, botsShare - nv.share - amd.share);
@@ -356,36 +364,51 @@ const P2PNetwork = {
             if (intel) intel.share = 3;
         }
 
-        const playersPoolShare = 100 - ((nv?.share || 0) + (amd?.share || 0) + (intel?.share || 0));
+        const totalPlayersPool = 100 - ((nv?.share || 0) + (amd?.share || 0) + (intel?.share || 0));
 
-        // Считаем общую мощность видеокарт всех игроков в сети (минимум 100 для базовой доли)
-        const myEffectivePower = Math.max(100, me.power || 0);
-        let totalPlayersPower = myEffectivePower;
-        peerList.forEach(p => {
-            totalPlayersPower += Math.max(100, p.power || 0);
+        // Новички с power === 0 получают ровно 1%, а остальной пул делится пропорционально мощности карт
+        const allParticipants = [
+            { isMe: true, ref: me, power: me.power || 0 },
+            ...peerList.map(p => ({ isMe: false, ref: p, power: p.power || 0 }))
+        ];
+
+        const newbies = allParticipants.filter(x => x.power <= 0);
+        const activeBuilders = allParticipants.filter(x => x.power > 0);
+
+        const newbieShareEach = 1;
+        const poolForBuilders = Math.max(activeBuilders.length, totalPlayersPool - newbies.length * newbieShareEach);
+        const totalActivePower = activeBuilders.reduce((sum, x) => sum + x.power, 0);
+
+        // Назначаем доли
+        allParticipants.forEach(item => {
+            if (item.power <= 0) {
+                item.share = newbieShareEach;
+            } else {
+                item.share = Math.max(1, Math.round((item.power / totalActivePower) * poolForBuilders));
+            }
         });
 
-        // Вычисляем долю текущего игрока
-        me.share = Math.max(1, Math.round((myEffectivePower / totalPlayersPower) * playersPoolShare));
-        let distributed = me.share;
+        // Корректируем округление, чтобы сумма всегда была ровно 100%
+        const currentSum = allParticipants.reduce((s, x) => s + x.share, 0);
+        const diff = totalPlayersPool - currentSum;
+        if (activeBuilders.length > 0) {
+            activeBuilders[0].share = Math.max(1, activeBuilders[0].share + diff);
+        } else if (allParticipants.length > 0) {
+            allParticipants[0].share = Math.max(1, allParticipants[0].share + diff);
+        }
 
-        // Вычисляем долю каждого онлайн-соперника
-        peerList.forEach((p, idx) => {
-            const pPower = Math.max(100, p.power || 0);
-            let share = Math.max(1, Math.round((pPower / totalPlayersPower) * playersPoolShare));
+        // Применяем долю текущего игрока и добавляем соперников в таблицу
+        me.share = allParticipants.find(x => x.isMe).share;
 
-            if (idx === peerList.length - 1) {
-                share = Math.max(1, playersPoolShare - distributed);
-            }
-            distributed += share;
-
+        allParticipants.filter(x => !x.isMe).forEach(item => {
+            const p = item.ref;
             MarketSystem.competitors.push({
                 id: p.peerId,
                 peerId: p.peerId,
                 isRemotePlayer: true,
                 name: `${p.avatar} ${p.nickname} (Игрок)`,
                 color: "#38bdf8",
-                share: share,
+                share: item.share,
                 flagship: p.flagship || "Нет релизов",
                 power: p.power || 0
             });
@@ -395,6 +418,7 @@ const P2PNetwork = {
             myShareBadge.textContent = `${me.share}%`;
         }
     },
+
 
     // Отправка предложения/поставки компонентов другому живому игроку
     sendTradeToPlayer(targetPeerId, partKey, amount, unitPrice) {
