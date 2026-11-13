@@ -1,10 +1,11 @@
-// МОДУЛЬ 8: Адаптация управления под сенсорные экраны (смартфоны и планшеты)
+// МОДУЛЬ 8: Сенсорное управление (перетаскивание, провода и удаление по двойному нажатию)
 
 const TouchControls = {
-    longPressTimer: null,
+    lastTapTime: 0,
+    lastTapTarget: null,
     touchStartPos: { x: 0, y: 0 },
-    isDraggingOrWiring: false,
-    LONG_PRESS_MS: 500,
+    hasMoved: false,
+    DOUBLE_TAP_MS: 350,
 
     init() {
         this.injectTouchStyles();
@@ -12,17 +13,18 @@ const TouchControls = {
         this.observeNodes();
     },
 
-    // Увеличиваем размер пинов на сенсорных экранах, чтобы в них было легко попадать пальцем
     injectTouchStyles() {
         const style = document.createElement('style');
         style.textContent = `
             @media (pointer: coarse) {
                 .pin {
-                    width: 18px !important;
-                    height: 18px !important;
+                    width: 20px !important;
+                    height: 20px !important;
                 }
                 .pcb-node {
                     touch-action: none;
+                    user-select: none;
+                    -webkit-user-select: none;
                 }
             }
             #pcb-canvas {
@@ -32,7 +34,6 @@ const TouchControls = {
         document.head.appendChild(style);
     },
 
-    // Следим за появлением новых деталей на плате и вешаем на них touch-обработчики
     observeNodes() {
         if (!nodesLayer) return;
 
@@ -54,68 +55,77 @@ const TouchControls = {
             const nodeObj = nodes.find(n => n.uid === uid);
             if (!nodeObj) return;
 
-            // 1. Касание самой детали (перетаскивание + долгое нажатие для удаления)
+            // 1. Касание самой детали (перетаскивание + двойной тап для удаления)
             el.addEventListener('touchstart', (e) => {
                 if (e.target.classList.contains('pin')) return;
                 if (e.touches.length !== 1) return;
 
                 e.preventDefault();
+                const now = Date.now();
+                const isDoubleTap = (this.lastTapTarget === uid) && (now - this.lastTapTime < this.DOUBLE_TAP_MS);
+
+                if (isDoubleTap) {
+                    // Двойной тап по детали — удаляем её с платы!
+                    this.lastTapTime = 0;
+                    this.lastTapTarget = null;
+                    draggedNode = null;
+                    nodes = nodes.filter(n => n.uid !== uid);
+                    WireSystem.removeWiresForNode(uid);
+                    if (navigator.vibrate) navigator.vibrate(35);
+                    renderBoard();
+                    return;
+                }
+
+                this.lastTapTime = now;
+                this.lastTapTarget = uid;
+
                 const touch = e.touches[0];
                 this.touchStartPos = { x: touch.clientX, y: touch.clientY };
-                this.isDraggingOrWiring = false;
+                this.hasMoved = false;
 
                 draggedNode = nodeObj;
                 const rect = el.getBoundingClientRect();
                 dragOffset.x = touch.clientX - rect.left;
                 dragOffset.y = touch.clientY - rect.top;
-
-                // Долгое нажатие (0.5 сек) без сдвига — удаляем деталь
-                this.clearLongPress();
-                this.longPressTimer = setTimeout(() => {
-                    if (!this.isDraggingOrWiring) {
-                        draggedNode = null;
-                        nodes = nodes.filter(n => n.uid !== uid);
-                        WireSystem.removeWiresForNode(uid);
-                        if (navigator.vibrate) navigator.vibrate(40);
-                        renderBoard();
-                    }
-                }, this.LONG_PRESS_MS);
             }, { passive: false });
 
-            // 2. Касание точек (пинов) детали — тянем провод или отключаем долгим нажатием
+            // 2. Касание точек (пинов) — тянем провод или отсоединяем провод двойным тапом
             const pinEls = el.querySelectorAll('.pin');
             pinEls.forEach(pinEl => {
                 const pinId = pinEl.dataset.pinId;
+                const pinKey = `${uid}_${pinId}`;
 
                 pinEl.addEventListener('touchstart', (e) => {
                     if (e.touches.length !== 1) return;
                     e.preventDefault();
                     e.stopPropagation();
 
-                    const touch = e.touches[0];
-                    this.touchStartPos = { x: touch.clientX, y: touch.clientY };
-                    this.isDraggingOrWiring = false;
+                    const now = Date.now();
+                    const isDoubleTap = (this.lastTapTarget === pinKey) && (now - this.lastTapTime < this.DOUBLE_TAP_MS);
 
-                    // Если пин уже занят — долгое нажатие отсоединит провод
-                    if (WireSystem.isPinOccupied(uid, pinId, false)) {
-                        this.clearLongPress();
-                        this.longPressTimer = setTimeout(() => {
-                            if (!this.isDraggingOrWiring) {
-                                WireSystem.disconnectPin(uid, pinId);
-                                if (navigator.vibrate) navigator.vibrate(40);
-                            }
-                        }, this.LONG_PRESS_MS);
+                    if (isDoubleTap) {
+                        this.lastTapTime = 0;
+                        this.lastTapTarget = null;
+                        WireSystem.cancelWiring();
+                        WireSystem.disconnectPin(uid, pinId);
+                        if (navigator.vibrate) navigator.vibrate(35);
                         return;
                     }
 
-                    // Начинаем тянуть провод от пина
+                    this.lastTapTime = now;
+                    this.lastTapTarget = pinKey;
+
+                    const touch = e.touches[0];
+                    this.touchStartPos = { x: touch.clientX, y: touch.clientY };
+                    this.hasMoved = false;
+
                     WireSystem.startWiring(uid, pinId);
                 }, { passive: false });
             });
         });
     },
+
     bindCanvasTouch() {
-        // Движение пальца по экрану (перетаскиваем деталь или тянем провод с магнитом)
         window.addEventListener('touchmove', (e) => {
             if (!draggedNode && !WireSystem.wiringStart) return;
             if (e.touches.length !== 1) return;
@@ -127,9 +137,10 @@ const TouchControls = {
                 touch.clientY - this.touchStartPos.y
             );
 
-            if (moveDist > 8) {
-                this.isDraggingOrWiring = true;
-                this.clearLongPress();
+            if (moveDist > 6) {
+                this.hasMoved = true;
+                // Если начали перетаскивать — сбрасываем таймер двойного тапа
+                this.lastTapTime = 0;
             }
 
             const canvasRect = canvasEl.getBoundingClientRect();
@@ -152,9 +163,7 @@ const TouchControls = {
             }
         }, { passive: false });
 
-        // Отпускание пальца (фиксируем деталь или соединяем провод)
         window.addEventListener('touchend', (e) => {
-            this.clearLongPress();
             draggedNode = null;
 
             if (WireSystem.wiringStart) {
@@ -194,17 +203,9 @@ const TouchControls = {
         });
 
         window.addEventListener('touchcancel', () => {
-            this.clearLongPress();
             draggedNode = null;
             WireSystem.cancelWiring();
         });
-    },
-
-    clearLongPress() {
-        if (this.longPressTimer) {
-            clearTimeout(this.longPressTimer);
-            this.longPressTimer = null;
-        }
     }
 };
 

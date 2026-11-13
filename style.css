@@ -1209,3 +1209,40 @@ h3 {
 .remove-friend-btn:hover {
     color: #f87171;
 }
+/* Исправление прокрутки всех модальных окон на телефонах и небольших экранах */
+.modal {
+    overflow-y: auto;
+    padding: 12px;
+    align-items: flex-start;
+}
+
+.modal-content,
+.modal-large {
+    max-height: 88vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: auto;
+    width: 100%;
+}
+
+@media (max-width: 750px) {
+    .modal-content,
+    .modal-large {
+        padding: 14px;
+        max-height: 90vh;
+    }
+
+    .research-grid,
+    .segment-grid,
+    .fab-layout {
+        grid-template-columns: 1fr !important;
+        max-height: none !important;
+        overflow-y: visible !important;
+    }
+
+    .stock-list,
+    .deal-list,
+    .friends-list {
+        max-height: none !important;
+    }
+}
