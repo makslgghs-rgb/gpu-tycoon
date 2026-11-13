@@ -1,0 +1,1211 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #0b1120;
+    color: #e2e8f0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1e293b;
+    padding: 15px 25px;
+    border-radius: 12px;
+    border: 1px solid #334155;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+header h1 {
+    color: #38bdf8;
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.badge {
+    background: #0284c7;
+    color: white;
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.stats {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.research-btn {
+    background-color: #4c1d95;
+    color: #ddd6fe;
+    border: 1px solid #8b5cf6;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.research-btn:hover {
+    background-color: #6d28d9;
+    color: white;
+}
+
+.market-btn {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+    border: 1px solid #3b82f6;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.market-btn:hover {
+    background-color: #2563eb;
+    color: white;
+}
+
+#my-share-badge {
+    color: #facc15;
+}
+
+.stat-box {
+    background-color: #0f172a;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    border: 1px solid #334155;
+    font-size: 14px;
+}
+
+#money {
+    color: #4ade80;
+}
+
+#reputation {
+    color: #facc15;
+}
+
+.game-grid {
+    display: grid;
+    grid-template-columns: 1.45fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 950px) {
+    .game-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.card {
+    background-color: #1e293b;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #334155;
+}
+
+.pcb-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+#gpu-name {
+    padding: 8px 12px;
+    background-color: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    color: white;
+    font-weight: bold;
+    width: 170px;
+}
+
+/* Панель компонентов с аккуратной высотой при большом числе открытых деталей */
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+    max-height: 115px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.add-part-btn {
+    padding: 6px 10px;
+    background-color: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+
+.add-part-btn:hover {
+    background-color: #334155;
+    border-color: #38bdf8;
+}
+
+.hint {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+/* Рабочее полотно печатной платы */
+.pcb-canvas {
+    position: relative;
+    width: 100%;
+    height: 410px;
+    background-color: #064e3b;
+    background-image: radial-gradient(#047857 1.5px, transparent 1.5px);
+    background-size: 20px 20px;
+    border-radius: 10px;
+    border: 4px solid #047857;
+    box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+    margin-bottom: 15px;
+    user-select: none;
+}
+
+.wires-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.nodes-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.pcb-node {
+    position: absolute;
+    min-width: 96px;
+    padding: 10px 12px;
+    background-color: #0f172a;
+    border: 2px solid #64748b;
+    border-radius: 8px;
+    color: #f8fafc;
+    text-align: center;
+    cursor: grab;
+    pointer-events: auto;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    transition: box-shadow 0.15s;
+}
+
+.pcb-node:active {
+    cursor: grabbing;
+    z-index: 10;
+}
+
+.pcb-node.compact {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pcb-node.connected {
+    box-shadow: 0 0 12px rgba(74, 222, 128, 0.65);
+}
+
+.pcb-node.disconnected {
+    box-shadow: 0 0 12px rgba(248, 113, 113, 0.65);
+}
+
+.node-title {
+    font-size: 12px;
+    font-weight: bold;
+    pointer-events: none;
+}
+
+.node-sub {
+    font-size: 10px;
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.pin {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    background-color: #38bdf8;
+    border: 2px solid #0f172a;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: crosshair;
+    z-index: 6;
+    pointer-events: auto;
+    transition: transform 0.1s, background-color 0.1s, box-shadow 0.1s;
+}
+
+.pin:hover {
+    transform: translate(-50%, -50%) scale(1.35);
+    background-color: #fbbf24;
+}
+
+.pin-occupied {
+    background-color: #fbbf24 !important;
+    border-color: #78350f !important;
+}
+
+.pin-snap {
+    transform: translate(-50%, -50%) scale(1.6) !important;
+    background-color: #4ade80 !important;
+    box-shadow: 0 0 12px #4ade80;
+}
+
+.pcb-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.primary-btn,
+.secondary-btn {
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.primary-btn {
+    flex: 2;
+    background-color: #2563eb;
+    color: white;
+}
+
+.primary-btn:hover {
+    background-color: #1d4ed8;
+}
+
+.secondary-btn {
+    flex: 1;
+    background-color: #334155;
+    color: #cbd5e1;
+}
+
+.secondary-btn:hover {
+    background-color: #475569;
+}
+
+.summary-box {
+    background-color: #0f172a;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+    border-left: 4px solid #38bdf8;
+}
+
+.summary-box p {
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+h3 {
+    font-size: 15px;
+    color: #94a3b8;
+    margin-bottom: 10px;
+}
+
+.log-box {
+    height: 310px;
+    overflow-y: auto;
+    background-color: #0f172a;
+    padding: 12px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.log-entry {
+    padding: 10px;
+    border-radius: 6px;
+    background-color: #1e293b;
+    border-left: 4px solid #4ade80;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.log-entry.fail {
+    border-left-color: #f87171;
+}
+
+.system-msg {
+    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* Модальные окна */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(2, 6, 23, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background-color: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 14px;
+    width: 92%;
+    max-width: 540px;
+    padding: 24px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.75);
+}
+
+.modal-content.modal-large {
+    max-width: 780px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.modal-header h2 {
+    font-size: 19px;
+    color: #f8fafc;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.close-btn:hover {
+    color: white;
+}
+
+.modal-desc {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 16px;
+}
+
+/* Доля рынка */
+.market-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.company-row {
+    background-color: #0f172a;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+}
+
+.company-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+.company-flagship {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 8px;
+}
+
+.bar-bg {
+    width: 100%;
+    height: 10px;
+    background-color: #1e293b;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.4s ease;
+}
+
+.market-news {
+    background-color: #0f172a;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border-left: 3px solid #facc15;
+    font-size: 13px;
+    color: #e2e8f0;
+}
+
+/* Сетка древа исследований */
+.research-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    max-height: 440px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.tech-card {
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.tech-card.unlocked {
+    border-color: #10b981;
+    background-color: #064e3b33;
+}
+
+.tech-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #f8fafc;
+}
+
+.tech-category {
+    font-size: 11px;
+    color: #38bdf8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tech-stats {
+    font-size: 12px;
+    color: #cbd5e1;
+    line-height: 1.4;
+}
+
+.buy-tech-btn {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    background-color: #7c3aed;
+    color: white;
+    transition: background 0.15s;
+}
+
+.buy-tech-btn:hover {
+    background-color: #6d28d9;
+}
+
+.buy-tech-btn:disabled {
+    background-color: #334155;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+.tech-owned-badge {
+    text-align: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #4ade80;
+    padding: 6px;
+    background-color: #064e3b;
+    border-radius: 6px;
+}
+/* Сетка выбора сегмента рынка при выпуске видеокарты */
+.segment-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 10px;
+}
+
+.segment-card {
+    background-color: #0f172a;
+    border: 2px solid #334155;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.segment-card:hover {
+    transform: translateY(-2px);
+    border-color: #38bdf8;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+
+.segment-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #f8fafc;
+    margin-bottom: 4px;
+}
+
+.segment-desc {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.4;
+}
+
+.segment-reqs {
+    background-color: #1e293b;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #cbd5e1;
+    line-height: 1.5;
+}
+
+.segment-fit {
+    font-size: 12px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.segment-fit.good {
+    background-color: #064e3b;
+    color: #4ade80;
+}
+
+.segment-fit.warn {
+    background-color: #78350f;
+    color: #fbbf24;
+}
+
+.segment-fit.bad {
+    background-color: #7f1d1d;
+    color: #f87171;
+}
+
+.select-segment-btn {
+    width: 100%;
+    padding: 10px;
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.select-segment-btn:hover {
+    background-color: #1d4ed8;
+}
+/* Кнопка и окно заводов */
+.factories-btn {
+    background-color: #78350f;
+    color: #fde68a;
+    border: 1px solid #f59e0b;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.factories-btn:hover {
+    background-color: #92400e;
+    color: white;
+}
+
+.factories-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+@media (max-width: 750px) {
+    .factories-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.factory-card {
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.factory-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background-color: #064e3b;
+    color: #34d399;
+    margin-bottom: 6px;
+}
+
+.factory-badge.prod {
+    background-color: #1e3a8a;
+    color: #60a5fa;
+}
+
+.factory-card h3 {
+    font-size: 16px;
+    color: #f8fafc;
+    margin-bottom: 6px;
+}
+
+.factory-desc {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.4;
+    margin-bottom: 10px;
+}
+
+.factory-stat {
+    background-color: #1e293b;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+
+.prod-select-label {
+    display: block;
+    font-size: 12px;
+    color: #cbd5e1;
+    margin-bottom: 4px;
+}
+
+.factory-select {
+    width: 100%;
+    padding: 8px;
+    background-color: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.factory-upgrade-btn {
+    width: 100%;
+    padding: 10px;
+    background-color: #059669;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.factory-upgrade-btn:hover {
+    background-color: #047857;
+}
+
+.factory-upgrade-btn.prod {
+    background-color: #2563eb;
+}
+
+.factory-upgrade-btn.prod:hover {
+    background-color: #1d4ed8;
+}
+
+.factory-upgrade-btn:disabled {
+    background-color: #334155;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+.max-level-badge {
+    text-align: center;
+    padding: 10px;
+    background-color: #064e3b;
+    color: #4ade80;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+/* Склад деталей */
+.warehouse-box {
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 14px;
+}
+
+.warehouse-box h3 {
+    color: #fbbf24;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.stock-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.empty-stock {
+    font-size: 12px;
+    color: #64748b;
+    text-align: center;
+    padding: 12px;
+}
+
+.stock-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1e293b;
+    padding: 10px 12px;
+    border-radius: 8px;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.stock-qty {
+    color: #4ade80;
+    font-weight: bold;
+}
+
+.stock-sub {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.stock-btns {
+    display: flex;
+    gap: 6px;
+}
+
+.sell-stock-btn {
+    padding: 6px 10px;
+    background-color: #334155;
+    color: #e2e8f0;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.sell-stock-btn:hover {
+    background-color: #475569;
+    border-color: #fbbf24;
+}
+
+.sell-stock-btn.all {
+    background-color: #78350f;
+    border-color: #f59e0b;
+    color: #fde68a;
+}
+/* Взаимодействие с компаниями и B2B-сделки */
+.company-row.clickable {
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+}
+
+.company-row.clickable:hover {
+    border-color: #38bdf8;
+    transform: translateY(-1px);
+}
+
+.company-actions {
+    margin-top: 10px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.deal-trigger-btn {
+    padding: 6px 12px;
+    background-color: #1e3a8a;
+    color: #93c5fd;
+    border: 1px solid #3b82f6;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.deal-trigger-btn:hover {
+    background-color: #2563eb;
+    color: white;
+}
+
+.deal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 320px;
+    overflow-y: auto;
+    margin-top: 10px;
+}
+
+.deal-item {
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.deal-item-info {
+    font-size: 13px;
+}
+
+.deal-price-tag {
+    color: #4ade80;
+    font-weight: bold;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.deal-sell-btns {
+    display: flex;
+    gap: 6px;
+}
+
+.deal-confirm-btn {
+    padding: 7px 12px;
+    background-color: #059669;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.deal-confirm-btn:hover {
+    background-color: #047857;
+}
+
+.deal-confirm-btn.all {
+    background-color: #0284c7;
+}
+
+.deal-confirm-btn.all:hover {
+    background-color: #0369a1;
+}
+/* Кнопка и модальное окно профиля */
+.profile-btn {
+    background: linear-gradient(135deg, #334155, #1e293b);
+    color: #f8fafc;
+    border: 1px solid #64748b;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.profile-btn:hover {
+    border-color: #38bdf8;
+    background: #334155;
+}
+
+.reg-box h3 {
+    color: #f8fafc;
+    font-size: 16px;
+    margin-bottom: 6px;
+}
+
+.reg-sub {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 14px;
+    line-height: 1.4;
+}
+
+.reg-label {
+    display: block;
+    font-size: 12px;
+    font-weight: bold;
+    color: #cbd5e1;
+    margin-bottom: 6px;
+}
+
+.avatar-picker {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.avatar-pick-btn {
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
+    background-color: #0f172a;
+    border: 2px solid #334155;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.avatar-pick-btn:hover {
+    border-color: #38bdf8;
+}
+
+.avatar-pick-btn.active {
+    border-color: #4ade80;
+    background-color: #064e3b;
+}
+
+.reg-input {
+    width: 100%;
+    padding: 10px 12px;
+    background-color: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+/* Карточка зарегистрированного профиля */
+.profile-card {
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.profile-main-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.profile-big-avatar {
+    font-size: 38px;
+    background-color: #1e293b;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    border: 2px solid #38bdf8;
+}
+
+.profile-nick {
+    font-size: 18px;
+    font-weight: bold;
+    color: #38bdf8;
+    margin-bottom: 4px;
+}
+
+.profile-meta {
+    font-size: 12px;
+    color: #cbd5e1;
+    margin-bottom: 2px;
+}
+
+.logout-btn {
+    padding: 6px 10px;
+    background-color: #7f1d1d;
+    color: #fecaca;
+    border: 1px solid #ef4444;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.logout-btn:hover {
+    background-color: #991b1b;
+}
+
+/* Список друзей */
+.friends-section h3 {
+    color: #f8fafc;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.add-friend-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.add-friend-bar input {
+    flex: 1;
+    padding: 8px 12px;
+    background-color: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+}
+
+.add-friend-btn {
+    padding: 8px 14px;
+    background-color: #059669;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.add-friend-btn:hover {
+    background-color: #047857;
+}
+
+.friends-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.friend-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.friend-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.friend-avatar {
+    font-size: 22px;
+}
+
+.friend-name {
+    font-size: 13px;
+    font-weight: bold;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.online {
+    background-color: #4ade80;
+    box-shadow: 0 0 6px #4ade80;
+}
+
+.status-dot.offline {
+    background-color: #64748b;
+}
+
+.friend-status {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.remove-friend-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.remove-friend-btn:hover {
+    color: #f87171;
+}

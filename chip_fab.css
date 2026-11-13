@@ -1,0 +1,224 @@
+/* СТИЛИ КОНСТРУКТОРА ИНДИВИДУАЛЬНЫХ КОМПОНЕНТОВ (CHIP FAB) */
+
+.fab-open-btn {
+    background: linear-gradient(135deg, #059669, #0284c7);
+    color: white;
+    border: 1px solid #34d399;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.fab-open-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 18px rgba(52, 211, 153, 0.7);
+}
+
+.fab-modal-content {
+    max-width: 960px;
+    width: 95%;
+    border: 2px solid #10b981;
+}
+
+.fab-layout {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 18px;
+}
+
+@media (max-width: 850px) {
+    .fab-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.fab-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.fab-controls input,
+.fab-controls select {
+    padding: 8px 12px;
+    background-color: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.fab-controls input {
+    flex: 1;
+    min-width: 140px;
+}
+
+/* Кнопки размера пластины */
+.fab-size-toolbar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.size-btn {
+    flex: 1;
+    padding: 7px 10px;
+    background-color: #0f172a;
+    border: 1px solid #475569;
+    color: #94a3b8;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.size-btn:hover {
+    border-color: #38bdf8;
+    color: #e2e8f0;
+}
+
+.size-btn.active {
+    background-color: #1e3a8a;
+    border-color: #60a5fa;
+    color: #ffffff;
+}
+
+/* Панель микро-блоков */
+.fab-micro-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.micro-btn {
+    padding: 6px 10px;
+    background-color: #0f172a;
+    border: 1px solid #475569;
+    color: #e2e8f0;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.micro-btn:hover {
+    border-color: #34d399;
+    background-color: #1e293b;
+}
+
+.micro-btn.active {
+    border-color: #4ade80;
+    background-color: #064e3b;
+    color: #ffffff;
+}
+
+.micro-btn.unique-part {
+    border-style: dashed;
+}
+
+/* Подсказка выбранного инструмента */
+.fab-tool-info {
+    background-color: #0f172a;
+    border-left: 4px solid #38bdf8;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #cbd5e1;
+    line-height: 1.4;
+    margin-bottom: 10px;
+}
+
+/* Кремниевая подложка микрочипа (сетка задается динамически из JS) */
+.silicon-wafer {
+    display: grid;
+    gap: 4px;
+    background-color: #090d16;
+    background-image: linear-gradient(rgba(16, 185, 129, 0.08) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(16, 185, 129, 0.08) 1px, transparent 1px);
+    background-size: 20px 20px;
+    padding: 10px;
+    border-radius: 10px;
+    border: 3px solid #334155;
+    box-shadow: inset 0 0 20px rgba(16, 185, 129, 0.2);
+}
+
+.wafer-cell {
+    background-color: #111827;
+    border: 1px dashed #374151;
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+    user-select: none;
+    overflow: hidden;
+    transition: all 0.1s;
+}
+
+.wafer-cell:hover {
+    border-color: #34d399;
+    background-color: #1f2937;
+}
+
+.wafer-cell.filled {
+    border-style: solid;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.wafer-icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.wafer-label {
+    font-size: 9px;
+    font-weight: bold;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.fab-summary {
+    background-color: #0f172a;
+    padding: 14px;
+    border-radius: 8px;
+    border-left: 4px solid #10b981;
+    margin-bottom: 12px;
+}
+
+.fab-summary p {
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.fab-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.fab-craft-btn {
+    flex: 2;
+    padding: 12px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.fab-craft-btn:hover {
+    background: linear-gradient(135deg, #34d399, #10b981);
+}
