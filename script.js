@@ -655,6 +655,7 @@ function executeB2BDeal(comp, partKey, amount, unitPrice) {
 
 
 // Полный сброс компании при банкротстве (текущий год остаётся общим для всех)
+// Полный сброс компании при банкротстве (текущий год остаётся общим для всех)
 function triggerBankruptcyReset() {
     money = SANDBOX_MODE ? 100000000 : 4000;
     reputation = 10;
@@ -697,11 +698,17 @@ function triggerBankruptcyReset() {
     buildToolbar();
     renderBoard();
 
+    // Сразу фиксируем сброшенное состояние в автосохранении
+    if (typeof SaveSystem !== 'undefined') {
+        SaveSystem.saveGame();
+    }
+
     addLog(
         `💥 <strong>БАНКРОТСТВО!</strong> У корпорации закончились средства и детали. Вы основали новый стартап с капиталом <strong>$${money.toLocaleString()}</strong> (текущий год: <strong>${year} г.</strong>)!`,
         true
     );
 }
+
 
 // Очистка платы
 clearBtn.addEventListener('click', () => {
@@ -723,3 +730,14 @@ myShareBadge.textContent = `${MarketSystem.getPlayerShare()}%`;
 if (typeof FactorySystem !== 'undefined') FactorySystem.updateBadge();
 buildToolbar();
 renderBoard();
+// Запуск игры и загрузка автосохранения
+moneyEl.textContent = `$${money.toLocaleString()}`;
+myShareBadge.textContent = `${MarketSystem.getPlayerShare()}%`;
+if (typeof FactorySystem !== 'undefined') FactorySystem.updateBadge();
+buildToolbar();
+renderBoard();
+
+if (typeof SaveSystem !== 'undefined') {
+    SaveSystem.loadGame();
+}
+
