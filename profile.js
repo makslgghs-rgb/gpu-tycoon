@@ -7,7 +7,7 @@ const ProfileSystem = {
     EPOCH_KEY: 'gpu_tycoon_world_epoch_v1',
 
     // Укажи здесь свой точный никнейм создателя — только у тебя появится кнопка вайпа!
-    ADMIN_NICK: 'Name',
+    ADMIN_NICK: 'MaksLGGH',
 
     user: null,
     accountsRegistry: {},
