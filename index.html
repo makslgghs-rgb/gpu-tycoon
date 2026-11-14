@@ -3,189 +3,148 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPU Tycoon — Конструктор и R&D</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="chip_fab.css">
+    <title>GPU Tycoon — Симулятор инженера видеокарт</title>
+    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="chip_fab.css?v=2">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>GPU Tycoon <span class="badge">P2P Swarm</span> <span id="p2p-status-badge" class="badge" style="background:#059669">Подключение...</span></h1>
-            <div class="stats">
-                <button id="open-fab-btn" class="fab-open-btn">🔮 Создать чип</button>
-                <button id="factories-btn" class="factories-btn">🏭 Заводы (<span id="factory-stock-badge">0 шт.</span>)</button>
-                <button id="research-btn" class="research-btn">🔬 Исследования (<span id="unlocked-count">6/18</span>)</button>
-                <button id="market-btn" class="market-btn">📊 Доля рынка: <span id="my-share-badge">3%</span></button>
-                <div class="stat-box">Бюджет: <span id="money">$4,000</span></div>
-                <div class="stat-box">Репутация: <span id="reputation">10</span> ★</div>
-                <div class="stat-box">Год: <span id="year">2010</span></div>
-                <button id="profile-btn" class="profile-btn"><span id="profile-btn-label">👤 Профиль</span></button>
-            </div>
-        </header>
-
-        <main class="game-grid">
-            <!-- Левая часть: Свободная плата -->
-            <section class="card">
-                <div class="pcb-header">
-                    <h2>Схема печатной платы</h2>
-                    <input type="text" id="gpu-name" value="GTX 100" maxlength="18">
-                </div>
-
-                <!-- Панель открытых деталей -->
-                <div id="parts-toolbar" class="toolbar"></div>
-
-                <p class="hint">
-                    • <b>ЛКМ</b> по детали — перетащить, <b>ПКМ</b> — удалить.<br>
-                    • <b>ЛКМ</b> по точке — тянуть провод (одна точка = один провод, кроме Узла-шины).<br>
-                    • <b>ПКМ</b> по проводу или занятой точке — отсоединить провод.
-                </p>
-
-                <!-- Рабочая область платы -->
-                <div id="pcb-canvas" class="pcb-canvas">
-                    <canvas id="wires-layer" class="wires-layer"></canvas>
-                    <div id="nodes-layer" class="nodes-layer"></div>
-                </div>
-
-                <div class="pcb-actions">
-                    <button id="clear-btn" class="secondary-btn">Очистить плату</button>
-                    <button id="release-btn" class="primary-btn">Выпустить на рынок!</button>
-                </div>
-            </section>
-
-            <!-- Правая часть: Характеристики и логи -->
-            <section class="card">
-                <h2>Анализ цепи и рынок</h2>
-                
-                <div class="summary-box">
-                    <p>Стоимость деталей: <strong id="dev-cost">$0</strong></p>
-                    <p>Статус цепи: <strong id="circuit-status">Нет GPU чипа</strong></p>
-                    <p>Мощность: <strong id="est-power">0</strong> баллов</p>
-                    <p>Температура: <strong id="est-temp">28</strong> °C</p>
-                </div>
-
-                <h3>Журнал релизов</h3>
-                <div id="log-container" class="log-box">
-                    <p class="system-msg">Открывайте новые чипы, память и системы охлаждения в меню <b>🔬 Исследования</b>, чтобы победить NVIDIA и AMD!</p>
-                </div>
-            </section>
-        </main>
-    </div>
-
-    <!-- Модальное окно доли рынка -->
-    <div id="market-modal" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>📊 Мировой рынок видеокарт (<span id="modal-year">2010</span> г.)</h2>
-                <button id="close-market-btn" class="close-btn">✖</button>
-            </div>
-            <p class="modal-desc">Чем выше ваша доля рынка, тем больше выручка с каждой проданной видеокарты!</p>
-            <div id="market-bars" class="market-bars"></div>
-            <div id="market-news" class="market-news"></div>
+    <header class="top-bar">
+        <div class="brand-group">
+            <h1>GPU Tycoon</h1>
+            <span class="p2p-tag">P2P Swarm</span>
+            <span id="p2p-status-badge" class="p2p-status">Подключение...</span>
         </div>
-    </div>
 
-    <!-- Модальное окно древа исследований -->
-    <div id="research-modal" class="modal hidden">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h2>🔬 Отдел исследований и разработок (R&D)</h2>
-                <button id="close-research-btn" class="close-btn">✖</button>
-            </div>
-            <p class="modal-desc">Инвестируйте бюджет в новые технологии. Изученные компоненты сразу появятся на панели сборки!</p>
-            <div id="research-list" class="research-grid"></div>
+        <div class="stats">
+            <button id="open-fab-btn" class="fab-header-btn">🧬 Создать чип</button>
+            <button id="factories-btn" class="factories-btn">🏭 Заводы (<span id="factory-stock-badge">0 шт.</span>)</button>
+            <button id="research-btn" class="research-btn">🔬 Исследования (<span id="unlocked-count">6/18</span>)</button>
+            <button id="market-btn" class="market-btn">📊 Доля рынка: <strong id="my-share-badge">3%</strong></button>
+            <div class="stat-box">Бюджет: <span id="money">$4 000</span></div>
+            <div class="stat-box">Репутация: <span id="reputation">10</span> ★</div>
+            <div class="stat-box">Год: <span id="year">2010</span></div>
+            <button id="profile-btn" class="profile-header-btn"><span id="profile-btn-label">👤 Войти / Рег.</span></button>
         </div>
-    </div>
+    </header>
 
-    <!-- Модальное окно конструктора индивидуальных компонентов (Chip Fab) -->
-    <div id="fab-modal" class="modal hidden">
-        <div class="modal-content fab-modal-content">
-            <div class="modal-header">
-                <h2>🔮 Лаборатория литографии (Chip Fab)</h2>
-                <button id="close-fab-btn" class="close-btn">✖</button>
+    <main class="workspace">
+        <!-- Левая панель: Конструктор печатной платы -->
+        <section class="board-section">
+            <div class="board-header">
+                <h2>Схема печатной платы</h2>
+                <input type="text" id="gpu-name" value="GTX 100" maxlength="22" placeholder="Название карты">
             </div>
-            <p class="modal-desc">Выберите размер пластины и тип чипа. Для каждого типа доступны уникальные микро-блоки (ЛКМ — поставить, ПКМ — убрать).</p>
 
-            <div class="fab-layout">
-                <div>
-                    <div class="fab-controls">
-                        <input type="text" id="fab-part-name" value="Apex 2.5nm" maxlength="16" placeholder="Название чипа">
-                        <select id="fab-role-select">
-                            <option value="core">Тип: GPU Ядро (Процессор)</option>
-                            <option value="memory">Тип: Память (VRAM)</option>
-                            <option value="power">Тип: Питание (VRM)</option>
-                            <option value="booster">Тип: Ускоритель (AI / Кэш)</option>
-                            <option value="cooler">Тип: Охлаждение (СВО)</option>
-                        </select>
-                    </div>
+            <div class="toolbar" id="parts-toolbar"></div>
 
-                    <!-- Кнопки выбора размера пластины -->
-                    <div id="fab-size-toolbar" class="fab-size-toolbar">
-                        <button class="size-btn" data-size="small">Маленькая (16) • ×0.5 цены</button>
-                        <button class="size-btn active" data-size="medium">Средняя (32) • ×1 цены</button>
-                        <button class="size-btn" data-size="large">Большая (64) • ×3 цены</button>
-                    </div>
-
-                    <div id="fab-micro-toolbar" class="fab-micro-toolbar"></div>
-                    <div id="silicon-wafer" class="silicon-wafer"></div>
-                </div>
-
-                <div>
-                    <div class="fab-summary">
-                        <p>Размер пластины: <strong id="fab-size-label">Средняя (32 яч., ×1)</strong></p>
-                        <p>Заполнено ячеек: <strong id="fab-cells-count">0/32</strong></p>
-                        <p>Мощность чипа: <strong id="fab-est-power">0</strong> баллов</p>
-                        <p>Тепловыделение: <strong id="fab-est-heat">+10 °C</strong></p>
-                        <p>Себестоимость 1 шт.: <strong id="fab-unit-cost">$400</strong></p>
-                        <p>Цена разработки маски: <strong id="fab-dev-cost">$5,000</strong></p>
-                    </div>
-
-                    <div class="fab-actions">
-                        <button id="fab-clear-btn" class="secondary-btn">Очистить</button>
-                        <button id="fab-craft-btn" class="fab-craft-btn">Создать деталь!</button>
-                    </div>
-                </div>
+            <div class="hint-bar">
+                • ЛКМ по детали — перетащить, ПКМ — удалить.<br>
+                • ЛКМ по точке — тянуть провод (одна точка = один провод, кроме Узла-шины).<br>
+                • ПКМ по проводу или занятой точке — отсоединить провод.
             </div>
-        </div>
-    </div>
 
-    <!-- Модальное окно выбора сегмента рынка перед выпуском -->
+            <div class="pcb-canvas" id="pcb-canvas">
+                <svg id="wires-layer"></svg>
+                <div id="nodes-layer"></div>
+            </div>
+
+            <div class="board-actions">
+                <button id="clear-btn" class="secondary-btn">Очистить плату</button>
+                <button id="release-btn" class="primary-btn">Выпустить на рынок!</button>
+            </div>
+        </section>
+
+        <!-- Правая панель: Симуляция и журнал -->
+        <section class="info-section">
+            <h2>Анализ цепи и рынок</h2>
+            <div class="summary-card">
+                <p>Стоимость деталей: <strong id="dev-cost">$0</strong></p>
+                <p>Статус цепи: <strong id="circuit-status">Установите GPU Чип!</strong></p>
+                <p>Мощность: <strong id="est-power">0</strong> баллов</p>
+                <p>Температура: <strong id="est-temp">28</strong> °C</p>
+            </div>
+
+            <h3>Журнал релизов</h3>
+            <div class="log-container" id="log-container">
+                <div class="log-entry">Открывайте новые чипы, память и системы охлаждения в меню <b>🔬 Исследования</b>, чтобы победить NVIDIA и AMD!</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Модальное окно: Выбор целевого сегмента рынка -->
     <div id="segment-modal" class="modal hidden">
         <div class="modal-content modal-large">
             <div class="modal-header">
                 <h2>🎯 Выберите целевой сегмент рынка</h2>
                 <button id="close-segment-btn" class="close-btn">✖</button>
             </div>
-            <p class="modal-desc">Разные покупатели ценят разные характеристики. Учитывайте бюджет аудитории, объем памяти и температуру!</p>
-            
+            <p class="modal-subtitle">Разные покупатели ценят разные характеристики. Учитывайте бюджет аудитории, объем памяти и температуру!</p>
             <div id="segment-cards" class="segment-grid"></div>
         </div>
     </div>
-    
-        <!-- Модальное окно заводов и склада -->
+
+    <!-- Модальное окно: Доля рынка и конкуренты -->
+    <div id="market-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📊 Мировой рынок видеокарт (<span id="modal-year">2010</span> г.)</h2>
+                <button id="close-market-btn" class="close-btn">✖</button>
+            </div>
+            <p class="modal-subtitle">Чем выше ваша доля рынка, тем больше выручка с каждой проданной видеокарты!</p>
+            <div id="market-bars" class="market-bars"></div>
+            <div id="market-news" class="market-news"></div>
+        </div>
+    </div>
+
+    <!-- Модальное окно: Древо исследований (R&D) -->
+    <div id="research-modal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>🔬 Лаборатория исследований (R&D)</h2>
+                <button id="close-research-btn" class="close-btn">✖</button>
+            </div>
+            <p class="modal-subtitle">Инвестируйте прибыль в разработку передовых GPU-чипов, памяти и систем охлаждения.</p>
+            <div id="research-list" class="research-grid"></div>
+        </div>
+    </div>
+
+    <!-- Модальное окно: Управление заводами и склад -->
     <div id="factories-modal" class="modal hidden">
         <div class="modal-content modal-large">
             <div class="modal-header">
-                <h2>🏭 Управление заводами и складом</h2>
+                <h2>🏭 Заводы и логистика</h2>
                 <button id="close-factories-btn" class="close-btn">✖</button>
             </div>
-            <p class="modal-desc">Стройте заводы для снижения себестоимости деталей или запускайте собственное производство компонентов на склад.</p>
+            <p class="modal-subtitle">Оптимизируйте цепочки поставок или штампуйте бесплатные детали для своих видеокарт!</p>
             <div id="factories-body"></div>
         </div>
     </div>
 
-    <!-- Модальное окно сделки с компанией-конкурентом -->
+    <!-- Модальное окно: Лаборатория Chip Fab -->
+    <div id="fab-modal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>🧬 Chip Fab — Проектирование процессора</h2>
+                <button id="close-fab-btn" class="close-btn">✖</button>
+            </div>
+            <p class="modal-subtitle">Настройте архитектуру, количество ядер, техпроцесс и создайте собственный уникальный чип!</p>
+            <div id="fab-body"></div>
+        </div>
+    </div>
+
+    <!-- Модальное окно: B2B-сделка с конкурентом -->
     <div id="deal-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="deal-modal-title">🤝 Сделка с компанией</h2>
+                <h2 id="deal-modal-title">🤝 B2B-Контракт</h2>
                 <button id="close-deal-btn" class="close-btn">✖</button>
             </div>
-            <p id="deal-modal-desc" class="modal-desc">Выберите компоненты со склада ваших заводов для продажи по B2B-контракту.</p>
+            <p id="deal-modal-desc" class="modal-subtitle"></p>
             <div id="deal-body"></div>
         </div>
     </div>
 
-     <!-- Модальное окно профиля игрока и друзей -->
+    <!-- Модальное окно: Профиль игрока и друзья -->
     <div id="profile-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -196,15 +155,14 @@
         </div>
     </div>
 
-    <script src="parts.js"></script>
-    <script src="factories.js"></script>
-    <script src="wires.js"></script>
-    <script src="engine.js"></script>
-    <script src="script.js"></script>
-    <script src="save_system.js"></script>
-    <script src="chip_fab.js"></script>
-    <script src="profile.js"></script>
-    <script src="p2p_network.js"></script>
-    <script src="touch_controls.js"></script>
+    <script src="parts.js?v=2"></script>
+    <script src="factories.js?v=2"></script>
+    <script src="wires.js?v=2"></script>
+    <script src="engine.js?v=2"></script>
+    <script src="script.js?v=2"></script>
+    <script src="chip_fab.js?v=2"></script>
+    <script src="profile.js?v=2"></script>
+    <script src="p2p_network.js?v=2"></script>
+    <script src="touch_controls.js?v=2"></script>
 </body>
 </html>
