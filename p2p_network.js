@@ -1,7 +1,4 @@
-// МОДУЛЬ 7: Децентрализованный P2P-мультиплеер на чистом встроенном WebSocket (0 внешних библиотек)
-// Нагрузка распределена между всеми активными игроками в сети.
-
-// МОДУЛЬ 7: Децентрализованный P2P-мультиплеер на нативном WebSocket + MQTT-фрейминге (0 внешних файлов)
+// МОДУЛЬ 7: Децентрализованный P2P-мультиплеер (Онлайн + Офлайн компании + Синхронизация эпохи + Вайп)
 
 const P2PNetwork = {
     BROKERS: [
@@ -20,7 +17,9 @@ const P2PNetwork = {
     heartbeatTimer: null,
 
     init() {
-        // 1. Локальный мост между вкладками на одном ПК
+        // Сразу строим рынок с учётом сохранённых офлайн-компаний из реестра
+        this.recalculateGlobalMarket();
+
         if (typeof BroadcastChannel !== 'undefined') {
             this.localChannel = new BroadcastChannel('gpu_tycoon_local_swarm');
             this.localChannel.onmessage = (event) => {
@@ -30,21 +29,18 @@ const P2PNetwork = {
             };
         }
 
-        // 2. Прямое подключение к глобальному Pub/Sub-брокеру через встроенный WebSocket
         this.connectToBroker();
     },
 
-    // Упаковка строки в UTF-8 с 2-байтовым префиксом длины (стандарт протокола MQTT)
     encodeStr(str) {
         const bytes = new TextEncoder().encode(str);
         const out = new Uint8Array(2 + bytes.length);
-        out[0] = (bytes.length >> 8) & 0xff;
-        out[1] = bytes.length & 0xff;
+        out = (bytes.length >> 8) & 0xff;
+        out = bytes.length & 0xff;
         out.set(bytes, 2);
         return out;
     },
 
-    // Кодирование переменной длины пакета
     encodeRemainingLength(len) {
         const res = [];
         do {
@@ -58,13 +54,13 @@ const P2PNetwork = {
 
     buildConnectPacket(clientId) {
         const proto = this.encodeStr('MQTT');
-        const flags = new Uint8Array([4, 2, 0, 60]); // v3.1.1, CleanSession, KeepAlive 60s
+        const flags = new Uint8Array();
         const cid = this.encodeStr(clientId);
         const bodyLen = proto.length + flags.length + cid.length;
         const remLen = this.encodeRemainingLength(bodyLen);
 
         const pkt = new Uint8Array(1 + remLen.length + bodyLen);
-        pkt[0] = 0x10; // CONNECT
+        pkt = 0x10;
         pkt.set(remLen, 1);
         pkt.set(proto, 1 + remLen.length);
         pkt.set(flags, 1 + remLen.length + proto.length);
@@ -78,12 +74,12 @@ const P2PNetwork = {
         const remLen = this.encodeRemainingLength(bodyLen);
 
         const pkt = new Uint8Array(1 + remLen.length + bodyLen);
-        pkt[0] = 0x82; // SUBSCRIBE
+        pkt = 0x82;
         pkt.set(remLen, 1);
         pkt[1 + remLen.length] = 0x00;
         pkt[2 + remLen.length] = 0x01;
         pkt.set(topicBytes, 3 + remLen.length);
-        pkt[3 + remLen.length + topicBytes.length] = 0x00; // QoS 0
+        pkt[3 + remLen.length + topicBytes.length] = 0x00;
         return pkt;
     },
 
@@ -94,7 +90,7 @@ const P2PNetwork = {
         const remLen = this.encodeRemainingLength(bodyLen);
 
         const pkt = new Uint8Array(1 + remLen.length + bodyLen);
-        pkt[0] = 0x30; // PUBLISH QoS 0
+        pkt = 0x30;
         pkt.set(remLen, 1);
         pkt.set(topicBytes, 1 + remLen.length);
         pkt.set(payloadBytes, 1 + remLen.length + topicBytes.length);
@@ -131,10 +127,9 @@ const P2PNetwork = {
         this.ws.onmessage = (event) => {
             const buf = new Uint8Array(event.data);
             if (!buf || buf.length < 2) return;
-            const packetType = buf[0] >> 4;
+            const packetType = buf >> 4;
 
-            // CONNACK (тип 2) — сервер подтвердил подключение!
-            if (packetType === 2 && buf[3] === 0) {
+            if (packetType === 2 && buf === 0) {
                 clearTimeout(timeout);
                 this.isConnected = true;
                 this.ws.send(this.buildSubscribePacket(this.TOPIC));
@@ -145,7 +140,6 @@ const P2PNetwork = {
                 return;
             }
 
-            // PUBLISH (тип 3) — пришло сообщение от другого игрока в мире!
             if (packetType === 3) {
                 try {
                     let pos = 1;
@@ -201,9 +195,8 @@ const P2PNetwork = {
         this.heartbeatTimer = setInterval(() => {
             this.cleanupDeadPeers();
 
-            // Пинг для поддержания соединения с брокером
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(new Uint8Array([0xC0, 0x00])); // PINGREQ
+                this.ws.send(new Uint8Array([0xC0, 0x00]));
             }
 
             const activeCount = Object.keys(this.peers).length + 1;
@@ -251,9 +244,11 @@ const P2PNetwork = {
             avatar: prof.avatar,
             year: year,
             money: money,
+            reputation: reputation,
             power: ship.power,
             flagship: ship.flagship,
             news: extraText,
+            worldEpoch: (typeof ProfileSystem !== 'undefined') ? ProfileSystem.worldEpoch : 1,
             registry: (typeof ProfileSystem !== 'undefined') ? ProfileSystem.accountsRegistry : {},
             ts: Date.now()
         };
@@ -265,16 +260,54 @@ const P2PNetwork = {
             this.ws.send(this.buildPublishPacket(this.TOPIC, JSON.stringify(packet)));
         }
     },
-    // Обработка данных от других игроков в сети
-        // Обработка данных от других игроков в сети (с защитой от клонов при перезагрузке)
+    // Обработка данных от других игроков (включая синхронизацию эпохи, вайп и своего аккаунта)
     handleWorldMessage(msg) {
-        // Игнорируем пакеты от нашего же аккаунта, если мы вошли под тем же ником с другого окна
+        // 1. Проверяем, не был ли запущен глобальный вайп администратором
+        if (typeof ProfileSystem !== 'undefined' && msg.worldEpoch) {
+            if (msg.worldEpoch > ProfileSystem.worldEpoch) {
+                ProfileSystem.applyGlobalWipe(msg.worldEpoch);
+                return;
+            } else if (msg.worldEpoch < ProfileSystem.worldEpoch) {
+                // Если к нам подключился игрок из старой эпохи — отправляем ему актуальный вайп
+                setTimeout(() => this.broadcastState('global_wipe'), 300);
+                return;
+            }
+        }
+
+        // 2. Синхронизация единого года (берём максимальный актуальный год из роя и сохраняем)
+        if (msg.year && msg.year > year) {
+            year = msg.year;
+            if (yearEl) yearEl.textContent = year;
+            if (typeof ProfileSystem !== 'undefined') ProfileSystem.saveGameProgress();
+        }
+
+        // 3. Если пакет пришёл от нашего же аккаунта с другого устройства (например, с ПК на телефон) — подтягиваем свежий прогресс!
         const myProf = this.getMyProfileInfo();
         if (msg.nickname && myProf.nickname && msg.nickname.toLowerCase() === myProf.nickname.toLowerCase()) {
+            const me = MarketSystem.competitors.find(c => c.id === 'player');
+            if ((msg.power || 0) > (me?.power || 0) || (msg.year || 0) > year) {
+                if (typeof msg.money === 'number') {
+                    money = msg.money;
+                    if (moneyEl) moneyEl.textContent = `$${money.toLocaleString()}`;
+                }
+                if (typeof msg.reputation === 'number') {
+                    reputation = msg.reputation;
+                    if (repEl) repEl.textContent = reputation;
+                }
+                if (me && msg.flagship) {
+                    me.flagship = msg.flagship;
+                    me.power = msg.power || 0;
+                }
+                if (typeof ProfileSystem !== 'undefined') ProfileSystem.saveGameProgress();
+                this.recalculateGlobalMarket();
+            }
+            if (msg.type === 'hello') {
+                setTimeout(() => this.broadcastState('sync'), 300);
+            }
             return;
         }
 
-        // Если игрок с таким ником перезагрузил страницу — удаляем его старую зависшую сессию
+        // 4. Удаляем зависшую старую сессию этого игрока, если он перезагрузил страницу
         for (const [oldId, oldPeer] of Object.entries(this.peers)) {
             if (oldId !== msg.senderId && oldPeer.nickname && oldPeer.nickname.toLowerCase() === msg.nickname.toLowerCase()) {
                 delete this.peers[oldId];
@@ -297,11 +330,6 @@ const P2PNetwork = {
             lastSeen: Date.now()
         };
 
-        if (msg.year && msg.year > year) {
-            year = msg.year;
-            if (yearEl) yearEl.textContent = year;
-        }
-
         if (msg.type === 'hello' && isNewPeer) {
             setTimeout(() => this.broadcastState('sync'), 300 + Math.random() * 700);
         }
@@ -320,7 +348,6 @@ const P2PNetwork = {
         }
     },
 
-
     cleanupDeadPeers() {
         const now = Date.now();
         let changed = false;
@@ -337,24 +364,66 @@ const P2PNetwork = {
         }
     },
 
-    // Распределённый пересчёт долей рынка между ИИ-ботами и всеми живыми игроками
-        // Честный пересчёт долей рынка (новички без релизов получают 1%, основной рынок у активных игроков)
+    // Расчёт долей рынка: участвуют и онлайн-игроки, и офлайн-компании из реестра
     recalculateGlobalMarket() {
-        const peerList = Object.values(this.peers);
         const me = MarketSystem.competitors.find(c => c.id === 'player');
         if (!me) return;
 
         MarketSystem.competitors = MarketSystem.competitors.filter(c => !c.isRemotePlayer);
-        if (peerList.length === 0) return;
+
+        const myNickLower = (typeof ProfileSystem !== 'undefined' && ProfileSystem.user)
+            ? ProfileSystem.user.nickname.toLowerCase()
+            : '';
+
+        // Собираем единую карту всех соперников (сначала из реестра как Офлайн, затем обновляем теми, кто Онлайн)
+        const competitorsMap = new Map();
+
+        if (typeof ProfileSystem !== 'undefined' && ProfileSystem.accountsRegistry) {
+            for (const [nickKey, acc] of Object.entries(ProfileSystem.accountsRegistry)) {
+                if (!acc || !acc.nickname || nickKey === myNickLower) continue;
+                competitorsMap.set(nickKey, {
+                    id: 'reg_' + nickKey,
+                    peerId: null,
+                    isOnline: false,
+                    nickname: acc.nickname,
+                    avatar: acc.avatar || "🧑‍💻",
+                    power: acc.power || 0,
+                    flagship: acc.flagship || "Нет релизов"
+                });
+            }
+        }
+
+        for (const p of Object.values(this.peers)) {
+            const key = (p.nickname || '').toLowerCase();
+            if (!key || key === myNickLower) continue;
+            competitorsMap.set(key, {
+                id: p.peerId,
+                peerId: p.peerId,
+                isOnline: true,
+                nickname: p.nickname,
+                avatar: p.avatar || "🧑‍💻",
+                power: p.power || 0,
+                flagship: p.flagship || "Нет релизов"
+            });
+        }
+
+        const remotePlayers = Array.from(competitorsMap.values());
+        if (remotePlayers.length === 0) return;
 
         const nv = MarketSystem.competitors.find(c => c.id === 'nvidia');
         const amd = MarketSystem.competitors.find(c => c.id === 'amd');
         const intel = MarketSystem.competitors.find(c => c.id === 'intel');
 
-        // После 2020 года боты фиксируются на 15%, до 2020 года постепенно уступают рынок
+        const allParticipants = [
+            { isMe: true, ref: me, power: me.power || 0 },
+            ...remotePlayers.map(p => ({ isMe: false, ref: p, power: p.power || 0 }))
+        ];
+
+        const activeBuilders = allParticipants.filter(x => x.power > 0);
+        const newbies = allParticipants.filter(x => x.power <= 0);
+
         if (year <= 2020) {
-            const activePlayersCount = [me, ...peerList].filter(p => (p.power || 0) > 0).length;
-            const botsShare = Math.max(25, 85 - activePlayersCount * 10);
+            const botsShare = Math.max(25, 85 - activeBuilders.length * 10);
             if (nv) nv.share = Math.round(botsShare * 0.50);
             if (amd) amd.share = Math.round(botsShare * 0.35);
             if (intel) intel.share = Math.max(1, botsShare - nv.share - amd.share);
@@ -365,21 +434,10 @@ const P2PNetwork = {
         }
 
         const totalPlayersPool = 100 - ((nv?.share || 0) + (amd?.share || 0) + (intel?.share || 0));
-
-        // Новички с power === 0 получают ровно 1%, а остальной пул делится пропорционально мощности карт
-        const allParticipants = [
-            { isMe: true, ref: me, power: me.power || 0 },
-            ...peerList.map(p => ({ isMe: false, ref: p, power: p.power || 0 }))
-        ];
-
-        const newbies = allParticipants.filter(x => x.power <= 0);
-        const activeBuilders = allParticipants.filter(x => x.power > 0);
-
         const newbieShareEach = 1;
         const poolForBuilders = Math.max(activeBuilders.length, totalPlayersPool - newbies.length * newbieShareEach);
         const totalActivePower = activeBuilders.reduce((sum, x) => sum + x.power, 0);
 
-        // Назначаем доли
         allParticipants.forEach(item => {
             if (item.power <= 0) {
                 item.share = newbieShareEach;
@@ -388,7 +446,6 @@ const P2PNetwork = {
             }
         });
 
-        // Корректируем округление, чтобы сумма всегда была ровно 100%
         const currentSum = allParticipants.reduce((s, x) => s + x.share, 0);
         const diff = totalPlayersPool - currentSum;
         if (activeBuilders.length > 0) {
@@ -397,17 +454,18 @@ const P2PNetwork = {
             allParticipants[0].share = Math.max(1, allParticipants[0].share + diff);
         }
 
-        // Применяем долю текущего игрока и добавляем соперников в таблицу
         me.share = allParticipants.find(x => x.isMe).share;
 
         allParticipants.filter(x => !x.isMe).forEach(item => {
             const p = item.ref;
+            const statusTag = p.isOnline ? '🟢 Онлайн' : '⚪ Офлайн';
             MarketSystem.competitors.push({
-                id: p.peerId,
+                id: p.id,
                 peerId: p.peerId,
                 isRemotePlayer: true,
-                name: `${p.avatar} ${p.nickname} (Игрок)`,
-                color: "#38bdf8",
+                isOnline: p.isOnline,
+                name: `${p.avatar} ${p.nickname} (${statusTag})`,
+                color: p.isOnline ? "#38bdf8" : "#94a3b8",
                 share: item.share,
                 flagship: p.flagship || "Нет релизов",
                 power: p.power || 0
@@ -419,14 +477,16 @@ const P2PNetwork = {
         }
     },
 
+        sendTradeToPlayer(targetPeerId, partKey, amount, unitPrice) {
+        if (!targetPeerId) {
+            addLog("⚠️ Игрок сейчас офлайн — прямая поставка доступна только игрокам в сети!", true);
+            return;
+        }
 
-    // Отправка предложения/поставки компонентов другому живому игроку
-    sendTradeToPlayer(targetPeerId, partKey, amount, unitPrice) {
         const spec = PART_CATALOG[partKey];
         const prof = this.getMyProfileInfo();
 
         const tradePacket = {
-            room: this.ROOM_SIGNATURE,
             channel: 'trade',
             type: 'direct_sale',
             senderId: this.peerId,
@@ -455,16 +515,14 @@ const P2PNetwork = {
             this.localChannel.postMessage(tradePacket);
         }
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify(tradePacket));
+            this.ws.send(this.buildPublishPacket(this.TOPIC, JSON.stringify(tradePacket)));
         }
     },
 
-    // Получение компонентов от другого игрока по сети
     handleTradeMessage(msg) {
         if (msg.targetId !== this.peerId) return;
 
         if (msg.type === 'direct_sale') {
-            // Если продавец прислал свой уникальный чип из Chip Fab — регистрируем его в каталоге получателя!
             if (!PART_CATALOG[msg.partKey] && msg.partSpec) {
                 PART_CATALOG[msg.partKey] = Object.assign({ researchCost: 0 }, msg.partSpec);
                 unlockedParts.add(msg.partKey);
@@ -475,6 +533,8 @@ const P2PNetwork = {
                 FactorySystem.inventory[msg.partKey] = (FactorySystem.inventory[msg.partKey] || 0) + msg.amount;
                 FactorySystem.updateBadge();
             }
+
+            if (typeof ProfileSystem !== 'undefined') ProfileSystem.saveGameProgress();
 
             addLog(
                 `📦 <b>[P2P-Поставка]</b> Игрок <strong>${msg.senderName}</strong> передал на ваш склад <strong>${msg.partSpec.icon} ${msg.partSpec.name} (${msg.amount} шт.)</strong>!`

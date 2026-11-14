@@ -1,12 +1,17 @@
-// МОДУЛЬ 6: Профиль игрока, вход/регистрация + надёжное автосохранение всего прогресса
+// МОДУЛЬ 6: Профиль игрока, автосохранение, реестр компаний и админ-вайп мира
 
 const ProfileSystem = {
     STORAGE_KEY: 'gpu_tycoon_profile_v2',
     REGISTRY_KEY: 'gpu_tycoon_accounts_registry_v1',
     GAMESTATE_KEY: 'gpu_tycoon_saved_progress_v3',
+    EPOCH_KEY: 'gpu_tycoon_world_epoch_v1',
+
+    // Укажи здесь свой точный никнейм создателя — только у тебя появится кнопка вайпа!
+    ADMIN_NICK: 'Name',
 
     user: null,
     accountsRegistry: {},
+    worldEpoch: 1,
     authMode: 'register',
     isPasswordVisible: false,
 
@@ -19,20 +24,65 @@ const ProfileSystem = {
         this.updateHeaderButton();
         this.bindEvents();
 
-        // Автосохранение ровно каждую 1 минуту (60 000 мс)
         setInterval(() => this.saveGameProgress(), 60000);
 
-        // Сохранение при сворачивании вкладки / переключении приложения на телефоне
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') this.saveGameProgress();
         });
 
-        // Сохранение при закрытии или обновлении страницы
         window.addEventListener('pagehide', () => this.saveGameProgress());
         window.addEventListener('beforeunload', () => this.saveGameProgress());
     },
 
-    // Сохранение полного прогресса игры (деньги, репутация, год, технологии, заводы, рынок)
+    isAdmin() {
+        return this.user && this.user.nickname.trim().toLowerCase() === this.ADMIN_NICK.trim().toLowerCase();
+    },
+
+    // Применение глобального вайпа (сброс всего прогресса, заводов, рынка и года до 2010)
+    applyGlobalWipe(newEpoch) {
+        if (newEpoch && newEpoch <= this.worldEpoch) return;
+        this.worldEpoch = newEpoch || Date.now();
+        localStorage.setItem(this.EPOCH_KEY, String(this.worldEpoch));
+
+        // Очищаем реестр компаний и локальное сохранение
+        this.accountsRegistry = {};
+        localStorage.removeItem(this.GAMESTATE_KEY);
+
+        // Возвращаем год в 2010 и сбрасываем корпорацию
+        year = 2010;
+        if (yearEl) yearEl.textContent = year;
+
+        if (typeof triggerBankruptcyReset === 'function') {
+            triggerBankruptcyReset();
+        }
+
+        // Если игрок был залогинен — оставляем его аккаунт в чистом реестре с 4000$
+        if (this.user) {
+            const key = this.user.nickname.toLowerCase();
+            this.accountsRegistry[key] = {
+                nickname: this.user.nickname,
+                passwordHash: this.hashPassword(this.user.nickname, this.user.savedPassword || '1234'),
+                avatar: this.user.avatar,
+                regDate: this.user.regDate,
+                money: money,
+                reputation: reputation,
+                flagship: "Нет релизов",
+                power: 0,
+                updatedAt: Date.now()
+            };
+        }
+
+        this.saveToStorage();
+        this.saveGameProgress();
+
+        if (typeof P2PNetwork !== 'undefined') {
+            P2PNetwork.peers = {};
+            P2PNetwork.recalculateGlobalMarket();
+        }
+
+        addLog("☢️ <b>ГЛОБАЛЬНЫЙ ВАЙП:</b> Администратор перезапустил игровой мир с чистого листа (2010 г., $4,000)!", true);
+    },
+
     saveGameProgress() {
         try {
             const customChips = {};
@@ -73,7 +123,6 @@ const ProfileSystem = {
         }
     },
 
-    // Восстановление полного прогресса при входе или обновлении страницы
     loadGameProgress() {
         try {
             const raw = localStorage.getItem(this.GAMESTATE_KEY);
@@ -128,8 +177,12 @@ const ProfileSystem = {
             console.warn("Ошибка загрузки прогресса:", e);
         }
     },
+
     loadFromStorage() {
         try {
+            const savedEpoch = localStorage.getItem(this.EPOCH_KEY);
+            if (savedEpoch) this.worldEpoch = Number(savedEpoch) || 1;
+
             const rawReg = localStorage.getItem(this.REGISTRY_KEY);
             if (rawReg) this.accountsRegistry = JSON.parse(rawReg);
 
@@ -182,21 +235,30 @@ const ProfileSystem = {
             }
         }
 
-        if (updated) this.saveToStorage();
+        if (updated) {
+            this.saveToStorage();
+            if (typeof P2PNetwork !== 'undefined') P2PNetwork.recalculateGlobalMarket();
+        }
     },
 
+    // Сохраняем в реестр не только деньги, но и флагман с мощностью (чтобы компанию было видно в офлайне)
     syncMyProgressToRegistry() {
         if (!this.user) return;
         const key = this.user.nickname.toLowerCase();
+        const playerComp = (typeof MarketSystem !== 'undefined')
+            ? MarketSystem.competitors.find(c => c.id === 'player')
+            : null;
+
         if (this.accountsRegistry[key]) {
             this.accountsRegistry[key].money = money;
             this.accountsRegistry[key].reputation = reputation;
+            this.accountsRegistry[key].flagship = playerComp ? playerComp.flagship : "Нет релизов";
+            this.accountsRegistry[key].power = playerComp ? (playerComp.power || 0) : 0;
             this.accountsRegistry[key].updatedAt = Date.now();
             this.saveToStorage();
         }
     },
-
-    updateHeaderButton() {
+        updateHeaderButton() {
         const badge = document.getElementById('profile-btn-label');
         if (!badge) return;
         badge.textContent = this.user ? `${this.user.avatar} ${this.user.nickname}` : "👤 Войти / Рег.";
@@ -274,6 +336,8 @@ const ProfileSystem = {
             regDate: regDate,
             money: money,
             reputation: reputation,
+            flagship: "Нет релизов",
+            power: 0,
             updatedAt: Date.now()
         };
 
@@ -291,7 +355,10 @@ const ProfileSystem = {
         this.updateHeaderButton();
         this.renderModal();
 
-        if (typeof P2PNetwork !== 'undefined') P2PNetwork.broadcastState('sync');
+        if (typeof P2PNetwork !== 'undefined') {
+            P2PNetwork.recalculateGlobalMarket();
+            P2PNetwork.broadcastState('sync');
+        }
         addLog(`👤 Зарегистрирован уникальный профиль: <strong>${this.user.avatar} ${this.user.nickname}</strong>.`);
     },
 
@@ -334,7 +401,10 @@ const ProfileSystem = {
         this.updateHeaderButton();
         this.renderModal();
 
-        if (typeof P2PNetwork !== 'undefined') P2PNetwork.broadcastState('sync');
+        if (typeof P2PNetwork !== 'undefined') {
+            P2PNetwork.recalculateGlobalMarket();
+            P2PNetwork.broadcastState('sync');
+        }
         addLog(`🔓 Выполнен вход в профиль <strong>${this.user.avatar} ${this.user.nickname}</strong>!`);
     },
 
@@ -389,7 +459,6 @@ const ProfileSystem = {
         const container = document.getElementById('profile-body');
         if (!container) return;
 
-        // 1. Окно регистрации / входа
         if (!this.user) {
             const isReg = (this.authMode === 'register');
 
@@ -470,7 +539,6 @@ const ProfileSystem = {
             return;
         }
 
-        // 2. Карточка авторизованного профиля с защищённым показом пароля
         const rawPass = this.user.savedPassword || '••••••••';
         const maskedPass = '•'.repeat(Math.max(6, rawPass.length));
         const shownPasswordText = this.isPasswordVisible ? rawPass : maskedPass;
@@ -511,6 +579,15 @@ const ProfileSystem = {
             });
         }
 
+        const adminPanelHtml = this.isAdmin() ? `
+            <div style="margin-top: 14px; padding: 12px; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.12); border-radius: 8px;">
+                <div style="font-size: 13px; font-weight: 700; color: #f87171; margin-bottom: 6px;">👑 Панель создателя игры</div>
+                <button type="button" id="admin-global-wipe-btn" style="width: 100%; padding: 9px; background: #dc2626; color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer;">
+                    ☢️ Сбросить прогресс у всех (Вайп мира)
+                </button>
+            </div>
+        ` : '';
+
         container.innerHTML = `
             <div class="profile-card">
                 <div class="profile-main-info">
@@ -531,6 +608,8 @@ const ProfileSystem = {
                 <button id="profile-logout-btn" class="logout-btn">Выйти</button>
             </div>
 
+            ${adminPanelHtml}
+
             <div class="friends-section">
                 <h3>👥 Друзья (${this.user.friends.length})</h3>
                 <div class="add-friend-bar">
@@ -543,6 +622,15 @@ const ProfileSystem = {
 
         document.getElementById('toggle-pass-view-btn')?.addEventListener('click', () => {
             this.isPasswordVisible = !this.isPasswordVisible;
+            this.renderModal();
+        });
+
+        document.getElementById('admin-global-wipe-btn')?.addEventListener('click', () => {
+            const newEpoch = Date.now();
+            this.applyGlobalWipe(newEpoch);
+            if (typeof P2PNetwork !== 'undefined') {
+                P2PNetwork.broadcastState('global_wipe');
+            }
             this.renderModal();
         });
 
